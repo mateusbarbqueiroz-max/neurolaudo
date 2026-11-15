@@ -10,3 +10,6 @@ phantom/
 .DS_Store
 DerivedData/
 xcuserdata/
+.build/
+plugin/build/
+Package.resolved
