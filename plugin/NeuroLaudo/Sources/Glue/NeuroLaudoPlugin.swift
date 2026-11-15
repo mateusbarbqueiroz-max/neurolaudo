@@ -100,6 +100,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             let version = self?.context?.info.version ?? ""
             self?.presenter?.show(MeasureOutcome(title: "NeuroLaudo \(version)", text: Self.aboutText), in: invocation.parentWindow)
         }
+        // Prova de que o IsiX carregou e ativou o complemento; ver PluginLog.
+        PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(NeuroWindowPresets.ct.count + 7) comandos")
     }
 
     public func deactivate() {
