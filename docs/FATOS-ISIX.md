@@ -114,3 +114,73 @@ Compilada com Swift 6.4.2. Resumo do que importa para a neuro:
   validação de bibliotecas para aceitar plugins de terceiros.
 - `script/run-isolated.sh` só funciona com o aplicativo de desenvolvimento
   (identificador terminado em `.local-development`), que é compilado do código-fonte.
+
+## O link do botão do PACS do usuário
+
+Formato (o identificador do exame e o nome do servidor não ficam no repositório):
+
+    osirix://?methodName=Retrieve&retrieveOnlyIfNeeded=yes&ServerName=XXX
+        &filterKey=StudyInstanceUID&filterValue=XXX&then=Open
+
+O que o IsiX 6.0.3 faz com cada parte (`Horos/Sources/XMLRPCInterface+Retrieve.swift`,
+`Horos/Sources/HorosSchemeURL.swift`):
+
+| Parte | No IsiX |
+| --- | --- |
+| `methodName=Retrieve` | Aceito; o nome do comando não diferencia maiúsculas |
+| `filterKey=StudyInstanceUID` | Aceito (até nove filtros) |
+| Aspas em volta dos valores | Removidas |
+| `serverName` | Lido exatamente assim; `ServerName` dá "server name is empty" (erro 400) |
+| `retrieveOnlyIfNeeded` | Ignorado: busca de novo |
+| `then=Open` | Ignorado: o exame chega e não abre |
+| `retrieveMode` | Aceito (opcional) |
+
+A busca é DICOM (C-FIND e depois C-MOVE ou C-GET): o servidor precisa estar em
+Settings > Locations com o mesmo nome, e o AE Title do IsiX é o destino do C-MOVE.
+
+O complemento supre o `then=Open` (`plugin/NeuroLaudo/Sources/Glue/AutoOpen.swift`).
+Os outros dois pontos dependem do autor do IsiX (`docs/PEDIDO-AO-ISIX.md`) ou de
+um encaminhador de links.
+
+## Porta de comandos (XML-RPC)
+
+- Ligar o suporte a URL liga também um servidor HTTP na porta 8080.
+- Valor de fábrica de `httpXMLRPCServerAccessScope`: `2` (qualquer endereço), sem
+  senha. Registro de uma instalação nova: "answering this Mac and any address,
+  WITHOUT a password". O README do IsiX diz que o padrão é só este Mac.
+- Valores: `0` só este Mac, `1` rede local, `2` qualquer endereço
+  (`Horos/Sources/XMLRPCServerAccess.swift`).
+- Com `0`, o registro passa a "answering this Mac only". Os links `osirix://`
+  continuam funcionando, porque são abertos no próprio Mac.
+- `FindObject` devolve o conteúdo do banco, com nomes e identificadores de pacientes.
+
+## Conferido no servidor Mac do GitHub (15/11/2026)
+
+Imagem `xcode-27-arm64`, macOS 27.0.1, Xcode 27.2, IsiX 6.0.3 notarizado.
+Fluxo em `.github/workflows/isix.yml`.
+
+- O complemento compila (arm64 e x86_64) e passa em `verify_bundle.py` ("loadable").
+- `mac/instalar.sh` baixa e instala o complemento.
+- `mac/botao-pacs.sh` roda sem erro e deixa o IsiX como destino de `osirix://`
+  (sem OsiriX MD na máquina para disputar).
+- O IsiX carrega o complemento: "Registering IsiX plugin app.neurolaudo.isixplugin
+  0.1.0 (API 1)" e, do complemento, "NeuroLaudo 0.1.0 ativado, 14 comandos".
+- Os 14 comandos aparecem no menu Plugins: seis janelas em Image Filters; quatro
+  medidas em ROI Tools; três em Database; a ajuda em Others.
+- Ao importar o fantoma, o complemento registra "exame recebido aberto: 1 série(s)".
+- Na primeira abertura, o macOS pergunta se o IsiX pode encontrar dispositivos
+  na rede local. Sem permitir, ele não alcança o PACS.
+- Ao abrir uma pasta pelo Finder, o IsiX pergunta "Copy Files" ou "Copy Links".
+
+- A abertura automática abre de fato um visualizador 2D com a série do fantoma
+  ("Axial 2.5mm"), conferido por captura de tela.
+- O atalho ⌃⌥4 do complemento aplica a janela de osso: o visualizador passa de
+  "WL: 40 WW: 80" para "WL: 600 WW: 2800" e o registro mostra "janela aplicada: Osso".
+
+Particularidade do servidor: as janelas do IsiX existem, mas só aparecem na tela
+depois do comando de menu Window > Tile 2D Viewer Windows (o aplicativo é aberto
+em segundo plano). As capturas ficam na versão `teste-isix` do repositório.
+
+Ainda não exercitado dentro do IsiX: as medidas com linhas desenhadas (Evans,
+linha média, ABC/2), o painel do ASPECTS, o protocolo em exame de RM e a
+comparação com exame anterior. Esses têm testes em Linux contra a imitação do kit.
