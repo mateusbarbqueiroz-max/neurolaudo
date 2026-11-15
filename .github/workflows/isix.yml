@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   teste:
@@ -73,7 +73,7 @@ jobs:
           "$EXE" -hideListenerError YES -moveToApplicationsFolderAlertSuppress YES \
             -DATABASELOCATION 1 -DATABASELOCATIONURL "$RAIZ" -DEFAULT_DATABASELOCATION 1 -DEFAULT_DATABASELOCATIONURL "$RAIZ" \
             -AUTOCLEANINGSPACE NO -AUTOCLEANINGDATE NO -AUTOROUTINGACTIVATED NO -STORESCP NO -USESTORESCP NO \
-            -checkForUpdatesPlugins NO -SUEnableAutomaticChecks NO -httpXMLRPCServer YES \
+            -checkForUpdatesPlugins NO -SUEnableAutomaticChecks NO -httpXMLRPCServer YES -httpXMLRPCServerAccessScope 0 \
             > "$SAIDA/isix-saida.txt" 2>&1 &
           sleep 45
           pgrep -fl "IsiX DICOM Viewer.app/Contents/MacOS/" || echo "O IsiX não está rodando"
@@ -101,8 +101,27 @@ jobs:
           echo "--- saída do IsiX:"; tail -40 "$SAIDA/isix-saida.txt" || true
           ls -la "$HOME/Library/Logs/DiagnosticReports/" 2>/dev/null | tail -5 || true
 
+      - name: Quem o IsiX atende pela porta de comandos (XML-RPC)
+        if: always()
+        run: grep -i "XML-RPC interface" "$SAIDA/isix-saida.txt" || echo "linha não encontrada"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: teste-no-isix
           path: saida
+
+      # As capturas e os registros também vão para uma versão de teste, de onde
+      # a sessão em nuvem consegue baixá-los (ela não alcança os artefatos).
+      - name: Publicar capturas e registros
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$SAIDA"
+          ls -la
+          if ! gh release view teste-isix >/dev/null 2>&1; then
+            gh release create teste-isix --title "Teste dentro do IsiX (automático)" --prerelease --latest=false \
+              --notes "Capturas de tela e registros do último teste automático no servidor Mac. Só o exame de teste (fantoma); nenhum dado de paciente."
+          fi
+          gh release upload teste-isix ./* --clobber
