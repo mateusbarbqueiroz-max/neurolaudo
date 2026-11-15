@@ -130,6 +130,35 @@ jobs:
           end tell
           EOF
           }
+          # Clica em um item de menu do IsiX: menu_clicar "Window" "Tile 2D Viewer Windows".
+          menu_clicar() {
+            /usr/bin/osascript - "$1" "$2" 2>&1 <<'EOF' || true
+          on run argv
+            tell application "System Events"
+              tell process "IsiX DICOM Viewer"
+                click menu item (item 2 of argv) of menu (item 1 of argv) of menu bar 1
+              end tell
+            end tell
+            return "menu: " & (item 1 of argv) & " > " & (item 2 of argv)
+          end run
+          EOF
+          }
+          # Todas as janelas do IsiX que o macOS conhece, visíveis ou não, com posição e tamanho.
+          diag() {
+            /usr/bin/swift "$RUNNER_TEMP/diag.swift" 2>&1 | head -40 || true
+          }
+          FIM
+          cat > "$RUNNER_TEMP/diag.swift" <<'FIM'
+          import CoreGraphics
+          import Foundation
+          let todas = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+          var n = 0
+          for w in todas where (w[kCGWindowOwnerName as String] as? String) == "IsiX DICOM Viewer" {
+              n += 1
+              let b = w[kCGWindowBounds as String] as? [String: Any] ?? [:]
+              print("janela CG: nome=\(w[kCGWindowName as String] ?? "-") camada=\(w[kCGWindowLayer as String] ?? "?") naTela=\(w[kCGWindowIsOnscreen as String] ?? 0) alfa=\(w[kCGWindowAlpha as String] ?? "?") x=\(b["X"] ?? "?") y=\(b["Y"] ?? "?") larg=\(b["Width"] ?? "?") alt=\(b["Height"] ?? "?")")
+          }
+          print("janelas CG do IsiX: \(n)")
           FIM
           sed -i '' 's/^          //' "$RUNNER_TEMP/ui.sh"
           bash -n "$RUNNER_TEMP/ui.sh" && echo "auxiliares de tela: ok"
@@ -200,6 +229,13 @@ jobs:
           clicar_isix "Copy Links"
           sleep 35
           janelas
+          diag
+          menu_clicar "Window" "Tile 2D Viewer Windows"
+          sleep 5
+          menu_clicar "Window" "Bring All to Front"
+          sleep 3
+          janelas
+          diag
           screencapture -x "$SAIDA/2-importado.png" || echo "captura falhou"
 
       - name: Janela de osso pelo atalho do complemento (⌃⌥4)
