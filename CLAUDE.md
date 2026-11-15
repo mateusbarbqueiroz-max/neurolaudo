@@ -7,8 +7,14 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
 
 - O usuário é neurorradiologista e não programa. Fala português do Brasil.
   Explique sem jargão de programação; termos médicos estão liberados.
-- Ele testa no Mac dele (Apple Silicon, 16 GB+) e relata o que viu. Não tem
-  Xcode: o trabalho é só pela nuvem, com compilação nos servidores Mac do GitHub.
+- O teste de verdade é em um Mac Apple Silicon com 16 GB ou mais, sem Xcode: o
+  trabalho é só pela nuvem, com compilação nos servidores Mac do GitHub.
+- **Até cerca de 4 de janeiro de 2027 não há Mac compatível.** O Mac atual é
+  antigo demais para o IsiX; o novo, onde a esposa do usuário vai trabalhar,
+  ainda não chegou. Até lá, o servidor Mac do GitHub é o único Mac disponível.
+  Não peça ao usuário para instalar ou testar nada no Mac; registre em
+  `docs/PENDENCIAS.md`.
+- Repositório: `mateusbarbqueiroz-max/neurolaudo`, público.
 - Para diagnóstico ele usa o OsiriX MD, que é certificado. O IsiX e o NeuroLaudo
   são apoio, sem certificação.
 
