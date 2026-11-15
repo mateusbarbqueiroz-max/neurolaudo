@@ -1,0 +1,81 @@
+# Compila o complemento NeuroLaudo em um servidor Mac do GitHub e publica o
+# resultado. O kit do IsiX (plugin/SDK) foi gerado com Swift 6.4.2, do Xcode 27:
+# por isso o servidor é o da imagem "xcode-27", com o Xcode mais novo que houver.
+name: Complemento (macOS)
+
+on:
+  push:
+    branches: [main]
+    paths: ["plugin/**", ".github/workflows/plugin.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plugin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compilar:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Escolher o Xcode mais novo
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          echo "Usando $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          swift --version
+
+      - name: Compilar (arm64 e x86_64)
+        working-directory: plugin
+        run: |
+          if ! script/build.sh --configuration Release; then
+            echo "::group::Fim do registro de compilação"
+            tail -150 build/logs/build-Release.log || true
+            echo "::endgroup::"
+            exit 1
+          fi
+
+      - name: Conferir e empacotar
+        working-directory: plugin
+        run: |
+          BUNDLE=build/Products/Release/NeuroLaudo.isixplugin
+          codesign --verify --deep --strict --verbose=2 "$BUNDLE"
+          lipo -archs "$BUNDLE/Contents/MacOS/NeuroLaudo"
+          /usr/libexec/PlistBuddy -c Print "$BUNDLE/Contents/Info.plist"
+          ditto -c -k --keepParent "$BUNDLE" NeuroLaudo.isixplugin.zip
+          shasum -a 256 NeuroLaudo.isixplugin.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NeuroLaudo.isixplugin
+          path: plugin/NeuroLaudo.isixplugin.zip
+
+      - name: Guardar o registro de compilação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-de-compilacao
+          path: plugin/build/logs
+          if-no-files-found: ignore
+
+      # Versão "contínua": sempre a última compilação que passou. É dela que
+      # mac/instalar.sh baixa o complemento.
+      - name: Publicar a versão contínua
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSAO="$(sed -n 's/^MARKETING_VERSION *= *//p' plugin/Config/NeuroLaudo.xcconfig)"
+          NOTAS="NeuroLaudo $VERSAO, compilado de ${GITHUB_SHA::7}. Uso em apoio à leitura; sem certificação para diagnóstico."
+          if gh release view continuo >/dev/null 2>&1; then
+            gh release upload continuo plugin/NeuroLaudo.isixplugin.zip --clobber
+            gh release edit continuo --notes "$NOTAS" --latest
+          else
+            gh release create continuo plugin/NeuroLaudo.isixplugin.zip --title "NeuroLaudo (versão contínua)" --notes "$NOTAS" --latest
+          fi

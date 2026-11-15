@@ -106,6 +106,22 @@ o IsiX precisa conhecer o servidor, como o OsiriX conhece.
    `DWI b1000`, `ADC`, `SWI`, `SAG T1 MPRAGE`. São nomes de protocolo, não
    dados de paciente. Preciso deles para montar os protocolos de exibição.
 
+## Passo 6 — Instalar o complemento NeuroLaudo (quando eu avisar)
+
+Só faça este passo depois que eu confirmar que o complemento compilou no
+servidor Mac. Com o IsiX fechado, cole no Terminal:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mateusbarbqueiroz-max/neurolaudo/main/mac/instalar.sh)
+```
+
+Abra o IsiX. Em **Plugins > Plugins Manager** deve aparecer o NeuroLaudo. Os
+comandos ficam nos menus **Plugins > Image Filters** (janelas), **Plugins > ROI
+Tools** (medidas) e **Plugins > Database** (protocolo e comparação). A ajuda
+está em **Plugins > Others > NeuroLaudo: ajuda**.
+
+Este comando só funciona com o repositório público.
+
 ## Opcional — trazer exames antigos
 
 No IsiX: **File > Import > Import Studies from Horos or OsiriX…**. Ele copia os

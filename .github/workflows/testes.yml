@@ -1,0 +1,40 @@
+# Testes que rodam em Linux: o núcleo e a "cola" do complemento (contra uma
+# imitação do kit do IsiX) e o motor em Python.
+name: Testes (Linux)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  complemento:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testes do complemento
+        working-directory: plugin
+        run: |
+          swift --version
+          swift test
+      - name: O complemento não usa nada que só exista na imitação do kit
+        run: |
+          if grep -rn "stub" plugin/NeuroLaudo/Sources; then
+            echo "O código do complemento usa membros que só existem na imitação." >&2
+            exit 1
+          fi
+
+  motor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Testes do motor
+        working-directory: engine
+        run: |
+          python -m pip install --quiet -e ".[dev]"
+          python -m pytest -q
