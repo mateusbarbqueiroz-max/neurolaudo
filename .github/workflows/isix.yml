@@ -31,7 +31,7 @@ jobs:
         run: |
           REPO=ThalesMMS/IsiX-DICOM-Viewer-macOS
           gh api "repos/$REPO/releases/latest" --jq '.tag_name, (.assets[] | "\(.name)  \(.size)")' | tee "$SAIDA/isix-versao.txt"
-          NOME="$(gh api "repos/$REPO/releases/latest" --jq '[.assets[].name | select(test("arm64"; "i")) | select(endswith(".zip")) | select(test("dsym|sdk|symbols"; "i") | not)] | first')"
+          NOME="$(gh api "repos/$REPO/releases/latest" --jq '[.assets[].name | select(test("apple.?silicon|arm64"; "i")) | select(endswith(".zip")) | select(test("dsym|sdk|symbols"; "i") | not)] | first')"
           echo "Arquivo escolhido: $NOME"
           mkdir -p "$RUNNER_TEMP/isix"
           gh release download --repo "$REPO" --pattern "$NOME" --dir "$RUNNER_TEMP/isix"
