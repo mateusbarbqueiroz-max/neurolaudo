@@ -360,11 +360,50 @@ public enum IsiXROIChange: Hashable, Sendable {
     case added, modified, removed, selected
 }
 
+public struct IsiXDatabaseImage: Hashable, Sendable {
+    public var sopInstanceUID: String
+    public var seriesInstanceUID: String
+    public var studyInstanceUID: String
+    public var instanceNumber: Int?
+    public var frame: Int
+    public var numberOfFrames: Int
+    public var file: URL?
+    public var modality: String?
+    public var columns: Int
+    public var rows: Int
+
+    public init(stubSOP: String, series: String, study: String, modality: String? = nil) {
+        sopInstanceUID = stubSOP
+        seriesInstanceUID = series
+        studyInstanceUID = study
+        instanceNumber = nil
+        frame = 0
+        numberOfFrames = 1
+        file = nil
+        self.modality = modality
+        columns = 256
+        rows = 256
+    }
+}
+
+public struct IsiXImagesAdded: Hashable, Sendable {
+    public var images: [IsiXDatabaseImage]
+    public var sopInstanceUIDsByCallingAETitle: [String: [String]]
+    public var isComplete: Bool
+
+    public init(stubImages: [IsiXDatabaseImage], byCallingAETitle: [String: [String]] = [:], isComplete: Bool) {
+        images = stubImages
+        sopInstanceUIDsByCallingAETitle = byCallingAETitle
+        self.isComplete = isComplete
+    }
+}
+
 public enum IsiXEvent: Hashable, Sendable {
     case viewerOpened(IsiXViewerID)
     case viewerWillClose(IsiXViewerID)
     case sliceChanged(IsiXViewerID, IsiXSlicePosition)
     case roiChanged(IsiXViewerID, IsiXROIID, IsiXROIChange)
+    case imagesAdded(IsiXImagesAdded)
 }
 
 public struct IsiXEventKinds: OptionSet, Hashable, Sendable {
@@ -728,8 +767,18 @@ extension IsiXPlugin {
         stubViewers.first { $0.id == id }
     }
 
+    public var stubObservers: [(kinds: IsiXEventKinds, handler: @MainActor @Sendable (IsiXEvent) -> Void)] = []
+
     public func observe(_ kinds: IsiXEventKinds = .all, _ handler: @escaping @MainActor @Sendable (IsiXEvent) -> Void) throws -> IsiXObservation {
-        IsiXObservation()
+        stubObservers.append((kinds, handler))
+        return IsiXObservation()
+    }
+
+    /// Só do stub: entrega um evento a quem o observa, como o IsiX faria.
+    public func stubEmit(_ event: IsiXEvent, kind: IsiXEventKinds) {
+        for observer in stubObservers where observer.kinds.contains(kind) {
+            observer.handler(event)
+        }
     }
 
     public func database() throws -> IsiXDatabase { stubDatabase }

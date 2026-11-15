@@ -58,6 +58,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         static let aspects = "medida-aspects"
         static let protocolAuto = "protocolo-neuro"
         static let comparePrior = "comparar-anterior"
+        static let autoOpenToggle = "abrir-ao-chegar"
         static let about = "sobre"
     }
 
@@ -74,6 +75,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         Exames (menu Plugins › Database):
         • Protocolo de neuro: abre as séries do exame na ordem do protocolo.
         • Comparar com exame anterior: abre a série equivalente do exame anterior.
+        • Abrir exame ao chegar: liga ou desliga a abertura automática do exame que chega \
+        pelo botão do PACS. Vem ligada.
 
         Uso em apoio à leitura. Sem certificação para diagnóstico.
         """
@@ -82,6 +85,10 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
     private var keyObservation: IsiXObservation?
     /// Trocado pelos testes; criado na ativação se ninguém o definiu.
     var presenter: Presenting?
+    /// Onde ficam as opções. Trocado pelos testes; por padrão, as preferências do IsiX.
+    var settings: SettingsStore?
+    private var eventObservation: IsiXObservation?
+    private var autoOpen: AutoOpen?
 
     public init() {}
 
@@ -90,6 +97,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
     public func activate(with context: IsiXPluginContext) throws {
         self.context = context
         if presenter == nil { presenter = PresenterFactory.make() }
+        autoOpen = AutoOpen(store: settings ?? DefaultsStore())
 
         try registerWindowCommands(context)
         try registerMeasureCommands(context)
@@ -101,12 +109,15 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             self?.presenter?.show(MeasureOutcome(title: "NeuroLaudo \(version)", text: Self.aboutText), in: invocation.parentWindow)
         }
         // Prova de que o IsiX carregou e ativou o complemento; ver PluginLog.
-        PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(NeuroWindowPresets.ct.count + 7) comandos")
+        PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(NeuroWindowPresets.ct.count + 8) comandos")
     }
 
     public func deactivate() {
         keyObservation?.invalidate()
         keyObservation = nil
+        eventObservation?.invalidate()
+        eventObservation = nil
+        autoOpen = nil
         presenter?.closeAll()
         presenter = nil
         context = nil
@@ -183,6 +194,20 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             guard let self, let context = self.context else { return }
             let viewer = invocation.viewer ?? (try? context.frontmostViewer())
             _ = try ProtocolCommands.compareWithPrior(context: context, viewer: viewer)
+        }
+        try context.register(IsiXCommand(id: Command.autoOpenToggle, title: "Abrir exame ao chegar: ligar ou desligar",
+                                         placement: .database, requirement: .none)) { [weak self] invocation in
+            guard let self, let autoOpen = self.autoOpen else { return }
+            autoOpen.isEnabled.toggle()
+            let text = autoOpen.isEnabled
+                ? "Ligada: o exame que chegar sozinho pela rede abre já arrumado pelo protocolo de neuro."
+                : "Desligada: os exames chegam ao banco de dados e não abrem sozinhos."
+            self.presenter?.show(MeasureOutcome(title: "Abertura automática", text: text), in: invocation.parentWindow)
+        }
+        // O exame que chega (por exemplo, pelo botão do PACS) abre sozinho.
+        eventObservation = try context.observe([.imagesAdded]) { [weak self] event in
+            guard let self, let context = self.context else { return }
+            self.autoOpen?.handle(event, context: context)
         }
     }
 

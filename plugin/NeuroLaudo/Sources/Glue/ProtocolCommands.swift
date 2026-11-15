@@ -38,8 +38,38 @@ extension StudyInfo {
 
     /// Abre as séries do protocolo, na ordem. `proto` nulo escolhe pelo tipo do exame.
     static func apply(_ proto: NeuroProtocol?, context: IsiXPluginContext, viewer: IsiXViewer?) throws -> MeasureOutcome {
+        let studyUID = try targetStudyUID(viewer: viewer, database: try context.database())
+        return try apply(proto, context: context, studyUID: studyUID)
+    }
+
+    /// Modalidades que não são imagem para ler: laudos estruturados, marcações, registros.
+    static let nonImageModalities: Set<String> = ["SR", "PR", "KO", "SEG", "DOC", "REG", "RTSTRUCT", "RTPLAN", "RTDOSE"]
+
+    /// Abre um exame que acabou de chegar: pelo protocolo de neuro, se ele
+    /// reconhecer o exame; senão, a primeira série de imagens, para que o exame
+    /// abra de qualquer modo. Devolve os nomes das séries abertas.
+    @discardableResult
+    static func openArrived(studyUID: String, context: IsiXPluginContext) throws -> [String] {
         let database = try context.database()
-        let studyUID = try targetStudyUID(viewer: viewer, database: database)
+        let before = openSeriesUIDs(context)
+        if (try? apply(nil, context: context, studyUID: studyUID)) != nil {
+            let opened = openSeriesUIDs(context).subtracting(before)
+            return try database.series(inStudy: studyUID).filter { opened.contains($0.seriesInstanceUID) }
+                .map { $0.seriesDescription ?? "" }
+        }
+        let series = try database.series(inStudy: studyUID)
+        if series.contains(where: { before.contains($0.seriesInstanceUID) }) { return [] }
+        let candidates = series
+            .filter { $0.imageCount > 0 && !nonImageModalities.contains(($0.modality ?? "").uppercased()) }
+            .sorted { ($0.seriesNumber ?? Int.max) < ($1.seriesNumber ?? Int.max) }
+        guard let first = candidates.first else { return [] }
+        try database.openViewer(forSeries: first.seriesInstanceUID)
+        return [first.seriesDescription ?? ""]
+    }
+
+    /// Abre as séries do protocolo de um estudo, na ordem.
+    static func apply(_ proto: NeuroProtocol?, context: IsiXPluginContext, studyUID: String) throws -> MeasureOutcome {
+        let database = try context.database()
         let series = try database.series(inStudy: studyUID).map(SeriesInfo.init)
         let chosen: NeuroProtocol
         if let proto {

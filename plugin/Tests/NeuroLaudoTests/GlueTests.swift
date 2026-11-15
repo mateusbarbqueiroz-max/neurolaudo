@@ -7,10 +7,21 @@ import IsiXPluginKit
     let context = IsiXPluginContext()
     let presenter = SilentPresenter()
     let plugin = NeuroLaudoPlugin()
+    let settings = MemoryStore()
 
     init() throws {
         plugin.presenter = presenter
+        plugin.settings = settings
         try plugin.activate(with: context)
+    }
+
+    /// Um recebimento que terminou, com uma imagem por série informada.
+    func arrival(_ seriesByStudy: [(study: String, series: String)], fromNetwork: Bool = true, complete: Bool = true) -> IsiXEvent {
+        let images = seriesByStudy.enumerated().map { index, item in
+            IsiXDatabaseImage(stubSOP: "sop-\(index)", series: item.series, study: item.study)
+        }
+        let network = fromNetwork ? ["PACS": images.map(\.sopInstanceUID)] : [:]
+        return .imagesAdded(IsiXImagesAdded(stubImages: images, byCallingAETitle: network, isComplete: complete))
     }
 
     func geometry(spacing: Double = 1, interval: Double = 5) -> IsiXImageGeometry {
@@ -82,7 +93,7 @@ final class GlueTests: XCTestCase {
     func testActivationRegistersEveryCommandOnce() throws {
         try onMain { h in
         let ids = h.context.stubCommands.map(\.command.id)
-        XCTAssertEqual(ids.count, 13)
+        XCTAssertEqual(ids.count, 14)
         XCTAssertEqual(Set(ids).count, ids.count)
         for preset in NeuroWindowPresets.ct { XCTAssertTrue(ids.contains(preset.id)) }
         XCTAssertTrue(ids.contains(NeuroLaudoPlugin.Command.evans))
