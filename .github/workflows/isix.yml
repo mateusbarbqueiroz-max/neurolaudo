@@ -75,6 +75,61 @@ jobs:
           end tell
           EOF
           }
+          # Clica em um botão de uma janela (ou folha) do próprio IsiX.
+          clicar_isix() {
+            /usr/bin/osascript - "$1" 2>&1 <<'EOF' || true
+          on run argv
+            set alvo to item 1 of argv
+            tell application "System Events"
+              tell process "IsiX DICOM Viewer"
+                repeat with w in windows
+                  try
+                    if exists (button alvo of w) then
+                      click button alvo of w
+                      return "clicado: " & alvo
+                    end if
+                  end try
+                  try
+                    repeat with s in (sheets of w)
+                      if exists (button alvo of s) then
+                        click button alvo of s
+                        return "clicado na folha: " & alvo
+                      end if
+                    end repeat
+                  end try
+                end repeat
+              end tell
+            end tell
+            return "botão não encontrado: " & alvo
+          end run
+          EOF
+          }
+          # Lista os itens do menu Plugins (prova de que os comandos apareceram) e do menu Window.
+          menus() {
+            /usr/bin/osascript 2>&1 <<'EOF' || true
+          set AppleScript's text item delimiters to " | "
+          tell application "System Events"
+            tell process "IsiX DICOM Viewer"
+              set saida to ""
+              tell menu bar 1
+                try
+                  set saida to saida & "menu Window: " & (name of every menu item of menu "Window" as text) & linefeed
+                end try
+                tell menu "Plugins"
+                  repeat with mi in menu items
+                    set saida to saida & "menu Plugins > " & (name of mi as text)
+                    try
+                      set saida to saida & ": " & (name of every menu item of menu 1 of mi as text)
+                    end try
+                    set saida to saida & linefeed
+                  end repeat
+                end tell
+              end tell
+              return saida
+            end tell
+          end tell
+          EOF
+          }
           FIM
           sed -i '' 's/^          //' "$RUNNER_TEMP/ui.sh"
           bash -n "$RUNNER_TEMP/ui.sh" && echo "auxiliares de tela: ok"
@@ -133,19 +188,29 @@ jobs:
           open -a "$APP" || true
           sleep 10
           janelas
+          menus
           screencapture -x "$SAIDA/1-aberto.png" || echo "captura falhou"
 
-      - name: Importar o exame de teste
+      - name: Importar o exame de teste (o complemento deve abri-lo sozinho)
         run: |
           source "$RUNNER_TEMP/ui.sh"
           open -a "$APP" "$RUNNER_TEMP/fantoma" || echo "open falhou"
-          sleep 25
+          sleep 15
           echo "avisos aceitos: $(permitir)"
+          clicar_isix "Copy Links"
+          sleep 35
           janelas
           screencapture -x "$SAIDA/2-importado.png" || echo "captura falhou"
-          sleep 20
+
+      - name: Janela de osso pelo atalho do complemento (⌃⌥4)
+        run: |
+          source "$RUNNER_TEMP/ui.sh"
+          /usr/bin/osascript -e 'tell application "IsiX DICOM Viewer" to activate' || true
+          sleep 2
+          /usr/bin/osascript -e 'tell application "System Events" to key code 21 using {control down, option down}' || echo "tecla falhou"
+          sleep 5
           janelas
-          screencapture -x "$SAIDA/3-depois.png" || echo "captura falhou"
+          screencapture -x "$SAIDA/3-osso.png" || echo "captura falhou"
 
       - name: Registros
         if: always()

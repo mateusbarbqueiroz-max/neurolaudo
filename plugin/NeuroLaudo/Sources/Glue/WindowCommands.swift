@@ -28,6 +28,7 @@ struct PluginFailure: Error, LocalizedError, Equatable {
             throw PluginFailure("As janelas de neuro valem para tomografia. Esta série é de \(modality).")
         }
         try viewer.setWindowLevel(IsiXWindowLevel(center: preset.center, width: preset.width))
+        PluginLog.note("janela aplicada: \(preset.name)")
     }
 
     /// O preset pedido por ⌃⌥ + dígito, se a tecla for essa.
