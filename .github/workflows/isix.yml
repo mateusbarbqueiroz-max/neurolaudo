@@ -23,14 +23,68 @@ jobs:
         run: |
           mkdir -p "$SAIDA"
           sw_vers
-          system_profiler SPDisplaysDataType | head -30 || true
+          # Auxiliares de tela: aceitar avisos do macOS e listar as janelas do IsiX.
+          cat > "$RUNNER_TEMP/ui.sh" <<'FIM'
+          permitir() {
+            /usr/bin/osascript 2>&1 <<'EOF' || true
+          tell application "System Events"
+            set achados to {}
+            repeat with p in (every process)
+              try
+                repeat with w in (every window of p)
+                  repeat with nome in {"Allow", "Permitir", "OK"}
+                    try
+                      if exists (button (nome as text) of w) then
+                        if (name of p as text) is not "IsiX DICOM Viewer" then
+                          click button (nome as text) of w
+                          set end of achados to ((name of p as text) & ": " & (nome as text))
+                        end if
+                      end if
+                    end try
+                  end repeat
+                end repeat
+              end try
+            end repeat
+            return achados
+          end tell
+          EOF
+          }
+          janelas() {
+            /usr/bin/osascript 2>&1 <<'EOF' || true
+          tell application "System Events"
+            if not (exists process "IsiX DICOM Viewer") then return "processo do IsiX não encontrado"
+            tell process "IsiX DICOM Viewer"
+              set saida to "janelas do IsiX: " & (count of windows) & linefeed
+              repeat with w in windows
+                set saida to saida & "- " & (name of w as text) & linefeed
+                try
+                  set saida to saida & "    textos: " & (value of every static text of w as text) & linefeed
+                end try
+                try
+                  set saida to saida & "    botões: " & (name of every button of w as text) & linefeed
+                end try
+                try
+                  repeat with s in (sheets of w)
+                    set saida to saida & "    folha, textos: " & (value of every static text of s as text) & linefeed
+                    set saida to saida & "    folha, botões: " & (name of every button of s as text) & linefeed
+                  end repeat
+                end try
+              end repeat
+              return saida
+            end tell
+          end tell
+          EOF
+          }
+          FIM
+          sed -i '' 's/^          //' "$RUNNER_TEMP/ui.sh"
+          bash -n "$RUNNER_TEMP/ui.sh" && echo "auxiliares de tela: ok"
 
       - name: Baixar o IsiX publicado (Apple Silicon)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           REPO=ThalesMMS/IsiX-DICOM-Viewer-macOS
-          gh api "repos/$REPO/releases/latest" --jq '.tag_name, (.assets[] | "\(.name)  \(.size)")' | tee "$SAIDA/isix-versao.txt"
+          gh api "repos/$REPO/releases/latest" --jq '.tag_name' | tee "$SAIDA/isix-versao.txt"
           NOME="$(gh api "repos/$REPO/releases/latest" --jq '[.assets[].name | select(test("apple.?silicon|arm64"; "i")) | select(endswith(".zip")) | select(test("dsym|sdk|symbols"; "i") | not)] | first')"
           echo "Arquivo escolhido: $NOME"
           mkdir -p "$RUNNER_TEMP/isix"
@@ -38,22 +92,17 @@ jobs:
           ditto -x -k "$RUNNER_TEMP/isix/$NOME" "$RUNNER_TEMP/isix/aberto"
           APP="$(find "$RUNNER_TEMP/isix/aberto" -maxdepth 3 -name '*.app' | head -1)"
           echo "APP=$APP" >> "$GITHUB_ENV"
-          echo "Aplicativo: $APP"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist"
           codesign --verify --deep --strict "$APP" && echo "assinatura do IsiX: ok"
           spctl --assess --type execute -vv "$APP" || true
 
       - name: Instalar o complemento com mac/instalar.sh
-        run: |
-          bash mac/instalar.sh
-          ls -la "$HOME/Library/Application Support/IsiX/Plugins/"
+        run: bash mac/instalar.sh
 
       - name: Script do botão do PACS (mac/botao-pacs.sh)
         run: |
           /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" || true
-          bash mac/botao-pacs.sh ver || echo "falhou: ver (antes)"
           bash mac/botao-pacs.sh isix || echo "falhou: isix"
-          bash mac/botao-pacs.sh ver || echo "falhou: ver (depois)"
+          bash mac/botao-pacs.sh ver || echo "falhou: ver"
 
       - uses: actions/setup-python@v5
         with:
@@ -67,43 +116,45 @@ jobs:
 
       - name: Abrir o IsiX
         run: |
+          source "$RUNNER_TEMP/ui.sh"
           RAIZ="$RUNNER_TEMP/banco"
           mkdir -p "$RAIZ"
           EXE="$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
           "$EXE" -hideListenerError YES -moveToApplicationsFolderAlertSuppress YES \
             -DATABASELOCATION 1 -DATABASELOCATIONURL "$RAIZ" -DEFAULT_DATABASELOCATION 1 -DEFAULT_DATABASELOCATIONURL "$RAIZ" \
             -AUTOCLEANINGSPACE NO -AUTOCLEANINGDATE NO -AUTOROUTINGACTIVATED NO -STORESCP NO -USESTORESCP NO \
+            -publishDICOMBonjour NO -searchDICOMBonjour NO \
             -checkForUpdatesPlugins NO -SUEnableAutomaticChecks NO -httpXMLRPCServer YES -httpXMLRPCServerAccessScope 0 \
             > "$SAIDA/isix-saida.txt" 2>&1 &
-          sleep 45
-          pgrep -fl "IsiX DICOM Viewer.app/Contents/MacOS/" || echo "O IsiX não está rodando"
+          sleep 30
+          pgrep -fl "IsiX DICOM Viewer.app/Contents/MacOS/" | cut -c1-80 || echo "O IsiX não está rodando"
+          echo "avisos aceitos: $(permitir)"
+          sleep 5
+          open -a "$APP" || true
+          sleep 10
+          janelas
           screencapture -x "$SAIDA/1-aberto.png" || echo "captura falhou"
 
       - name: Importar o exame de teste
         run: |
+          source "$RUNNER_TEMP/ui.sh"
           open -a "$APP" "$RUNNER_TEMP/fantoma" || echo "open falhou"
-          sleep 40
+          sleep 25
+          echo "avisos aceitos: $(permitir)"
+          janelas
           screencapture -x "$SAIDA/2-importado.png" || echo "captura falhou"
-
-      - name: Abrir o exame em um visualizador
-        run: |
-          open "horos://?methodName=DisplayStudy&PatientID=000001" || echo "link falhou"
-          sleep 40
-          screencapture -x "$SAIDA/3-visualizador.png" || echo "captura falhou"
+          sleep 20
+          janelas
+          screencapture -x "$SAIDA/3-depois.png" || echo "captura falhou"
 
       - name: Registros
         if: always()
         run: |
           log show --last 15m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' > "$SAIDA/registro-neurolaudo.txt" 2>&1 || true
-          log show --last 15m --style compact --predicate 'process == "IsiX DICOM Viewer"' 2>/dev/null | grep -iE "plugin|neurolaudo|horos URL|exception|error" | tail -200 > "$SAIDA/registro-isix.txt" || true
-          echo "--- NeuroLaudo:"; cat "$SAIDA/registro-neurolaudo.txt" | tail -20
-          echo "--- IsiX (linhas sobre plugins):"; tail -40 "$SAIDA/registro-isix.txt"
-          echo "--- saída do IsiX:"; tail -40 "$SAIDA/isix-saida.txt" || true
-          ls -la "$HOME/Library/Logs/DiagnosticReports/" 2>/dev/null | tail -5 || true
-
-      - name: Quem o IsiX atende pela porta de comandos (XML-RPC)
-        if: always()
-        run: grep -i "XML-RPC interface" "$SAIDA/isix-saida.txt" || echo "linha não encontrada"
+          log show --last 15m --style compact --predicate 'process == "IsiX DICOM Viewer"' 2>/dev/null | grep -iE "plugin|neurolaudo|horos URL|exception" | tail -100 > "$SAIDA/registro-isix.txt" || true
+          echo "--- NeuroLaudo:"; tail -20 "$SAIDA/registro-neurolaudo.txt"
+          echo "--- saída do IsiX (fim):"; tail -30 "$SAIDA/isix-saida.txt" || true
+          echo "--- porta de comandos:"; grep -i "XML-RPC interface" "$SAIDA/isix-saida.txt" || echo "linha não encontrada"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -119,7 +170,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd "$SAIDA"
-          ls -la
           if ! gh release view teste-isix >/dev/null 2>&1; then
             gh release create teste-isix --title "Teste dentro do IsiX (automático)" --prerelease --latest=false \
               --notes "Capturas de tela e registros do último teste automático no servidor Mac. Só o exame de teste (fantoma); nenhum dado de paciente."

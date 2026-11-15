@@ -4,8 +4,14 @@ Tempo: cerca de 20 minutos. Nada aqui altera ou apaga o OsiriX MD.
 
 O que eu conferi no código-fonte do IsiX: ele se registra para os links
 `osirix://` e aceita todos os comandos de link do OsiriX, inclusive o de baixar
-exames (`DownloadURL`). O que **não** conferi: nada disto foi executado em um
-Mac. O teste de verdade é o seu.
+exames (`DownloadURL`).
+
+O que conferi em um Mac de verdade (servidor do GitHub, macOS 27, IsiX 6.0.3):
+o IsiX abre, o instalador do complemento funciona, o IsiX carrega o
+complemento, e os comandos dos Passos 2 e 3 rodam sem erro.
+
+O que **não** conferi: o seu PACS, o OsiriX MD disputando o botão e a busca do
+exame no servidor do hospital. Esse teste é o seu.
 
 ## Passo 1 — Instalar o IsiX
 
@@ -52,64 +58,77 @@ Para **desfazer** e devolver o botão ao OsiriX MD:
 OSIRIX_ID="$(osascript -e 'id of app "OsiriX MD"')" && osascript -l JavaScript -e 'function run(a) { ObjC.import("CoreServices"); ObjC.bindFunction("LSSetDefaultHandlerForURLScheme", ["int", ["id", "id"]]); return String($.LSSetDefaultHandlerForURLScheme($("osirix"), $(a[0]))); }' "$OSIRIX_ID"
 ```
 
-Se algum comando der erro, copie a mensagem e me envie. Esta é a parte que eu
-menos consegui verificar.
+Se algum comando der erro, copie a mensagem e me envie. Estes comandos rodaram
+sem erro no servidor Mac, mas lá não havia OsiriX MD disputando o botão.
 
-## Passo 4 — Testar o botão
+## Passo 4 — Cadastrar o servidor do hospital no IsiX
 
-1. Feche o OsiriX MD (os dois programas não devem ficar abertos juntos no teste).
-2. No PACS do hospital, abra um exame e clique no botão do OsiriX.
-3. Na primeira vez, o IsiX avisa que o suporte a links está desligado. Clique em
-   **Activate & Restart**. Ele reinicia.
-4. Clique no botão do PACS de novo.
+O botão do PACS deste hospital manda o link no formato abaixo. Ele diz "busque
+este exame no servidor tal, por DICOM, e depois abra":
 
-O que pode acontecer:
+```
+osirix://?methodName=Retrieve&retrieveOnlyIfNeeded=yes&ServerName=XXX&filterKey=StudyInstanceUID&filterValue=XXX&then=Open
+```
 
-| Resultado | O que significa |
-| --- | --- |
-| O exame baixa e abre no IsiX | Funcionou. Etapa 1 concluída. |
-| O IsiX vem para a frente, mas nada baixa | O link pede para buscar o exame no PACS por DICOM. Falta o Passo 5. |
-| Aparece uma mensagem de erro | Me envie o texto da mensagem. |
-| Abre o OsiriX | O Passo 3 não pegou. Me avise. |
-
-## Passo 5 — Só se o exame não baixou
-
-Alguns PACS mandam um link que diz "busque este exame no servidor". Nesse caso
-o IsiX precisa conhecer o servidor, como o OsiriX conhece.
+Por isso o IsiX precisa conhecer o servidor, como o OsiriX MD conhece.
 
 1. No OsiriX MD, abra **Preferências > Locations** e anote do servidor do
    hospital: nome, endereço, AE Title e porta.
 2. Ainda no OsiriX MD, em **Preferências > Listener**, anote o AE Title e a
    porta do próprio OsiriX.
 3. No IsiX, em **Settings > Locations**, crie o servidor com os mesmos dados e
-   o **mesmo nome**.
+   o **mesmo nome**, letra por letra.
 4. No IsiX, em **Settings > Listener**, use o mesmo AE Title e a mesma porta
-   que o OsiriX usa.
-5. Com o OsiriX MD fechado, teste o botão de novo.
+   que o OsiriX usa. O servidor do hospital só entrega exames a quem ele conhece
+   por esse nome.
+
+## Passo 5 — Ativar os links e fechar a porta de comandos para a rede
+
+1. No IsiX, em **Settings > Listener**, marque **Activate the URL support and
+   HTTP XML-RPC Server on port** (8080).
+2. Ao lado da porta, clique em **Network Access…** e escolha que só **este Mac**
+   seja atendido.
+3. Feche e abra o IsiX.
+
+Não pule o item 2. Ao ligar os links, o IsiX também abre uma porta de comandos.
+No teste que fiz no servidor Mac, com a configuração de fábrica, ele informou
+que atende **qualquer endereço, sem senha**. Um desses comandos devolve o
+conteúdo do banco, com nomes e identificadores de pacientes. O botão do PACS
+não precisa disso: o link é aberto no próprio Mac.
+
+## Passo 6 — Testar o botão
+
+1. Feche o OsiriX MD: os dois programas usam a mesma porta DICOM e não podem
+   ficar abertos juntos.
+2. No PACS do hospital, abra um exame e clique no botão do OsiriX.
+
+O que pode acontecer:
+
+| Resultado | O que significa |
+| --- | --- |
+| O exame chega e abre sozinho, com as séries arrumadas | Funcionou. Quem abre é o complemento NeuroLaudo (Passo 7). |
+| O exame chega à lista do IsiX, mas não abre | O complemento não está instalado, ou a abertura automática está desligada. |
+| Aviso de que o nome do servidor está vazio, ou nada acontece | O link usa `ServerName` com S maiúsculo, que o IsiX não reconhece. Me avise. |
+| Aviso de servidor não encontrado | O nome em Settings > Locations não é igual ao do link. |
+| Aviso de que nada foi encontrado ou de falha na consulta | O servidor recusou o IsiX. Confira o AE Title e a porta do Passo 4. |
+| Abre o OsiriX | O Passo 3 não pegou. Me avise. |
 
 ## O que eu preciso que você me conte
 
-1. O que aconteceu no Passo 4.
-2. O **formato** do link do botão, sem dados de paciente. Como obter:
-   clique com o botão direito no botão do PACS, escolha **Copiar link**, cole
-   em um editor de texto e troque por `XXX` tudo o que vier depois de cada `=`,
-   menos o nome do comando. Exemplo do que enviar:
-
-   ```
-   osirix://?methodName=DownloadURL&Display=XXX&URL=XXX
-   ```
-
-   Não envie o link original: ele contém identificação do paciente e o
-   endereço do servidor do hospital.
+1. O que aconteceu no Passo 6.
+2. Se no link do botão está escrito `ServerName` ou `serverName`. A diferença
+   de maiúscula importa para o IsiX. Não envie o link inteiro: ele contém o
+   identificador do exame.
 3. Os **nomes das séries** dos seus exames de rotina (RM de encéfalo e TC de
    crânio), como aparecem na lista do visualizador, por exemplo `AX FLAIR`,
    `DWI b1000`, `ADC`, `SWI`, `SAG T1 MPRAGE`. São nomes de protocolo, não
-   dados de paciente. Preciso deles para montar os protocolos de exibição.
+   dados de paciente. Preciso deles para ajustar os protocolos de exibição.
 
-## Passo 6 — Instalar o complemento NeuroLaudo (quando eu avisar)
+## Passo 7 — Instalar o complemento NeuroLaudo
 
-Só faça este passo depois que eu confirmar que o complemento compilou no
-servidor Mac. Com o IsiX fechado, cole no Terminal:
+O complemento já compila no servidor Mac do GitHub, e lá o IsiX 6.0.3 o
+carregou e ativou. Pode ser instalado antes do Passo 6. Com o IsiX fechado,
+cole no Terminal:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/mateusbarbqueiroz-max/neurolaudo/main/mac/instalar.sh)
@@ -120,7 +139,9 @@ comandos ficam nos menus **Plugins > Image Filters** (janelas), **Plugins > ROI
 Tools** (medidas) e **Plugins > Database** (protocolo e comparação). A ajuda
 está em **Plugins > Others > NeuroLaudo: ajuda**.
 
-Este comando só funciona com o repositório público.
+O complemento também abre sozinho o exame que chega pela rede, com as séries
+arrumadas pelo protocolo de neuro. Para desligar ou religar: **Plugins >
+Database > Abrir exame ao chegar: ligar ou desligar**.
 
 ## Opcional — trazer exames antigos
 
