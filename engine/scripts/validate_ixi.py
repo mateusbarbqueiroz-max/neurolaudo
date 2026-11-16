@@ -56,9 +56,10 @@ def main(argv: list[str]) -> int:
         row.append(100.0 * (measured[norms.icv_column] / published[norms.icv_column] - 1.0))
         for name, value in zip(names, row):
             diffs[name].append(value)
-        worst = min(result["qualidade"].values()) if result["qualidade"] else float("nan")
+        cut = result["recorte"]
+        size = " x ".join(str(b - a) for a, b in zip(cut["inicio"], cut["fim"]))
         lines.append(f"{subject:22s} {person['sex']:6s} {float(person['age']):5.1f} anos  maior diferença {max(abs(v) for v in row):5.2f}%  "
-                     f"qualidade mínima {worst:.2f}  {result['tempos_s']['total']:.0f} s")
+                     f"recorte {size} voxels, {cut['segmentacoes']} segmentação(ões)  {result['tempos_s']['total']:.0f} s")
         print(lines[-1], flush=True)
         if len(seconds) == 1:   # páginas do primeiro sujeito, para olhar
             for name in ("relatorio.png", "conferencia.png", "relatorio.pdf", "resultado.json"):

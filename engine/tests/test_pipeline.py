@@ -69,6 +69,7 @@ def test_exam_from_volume_to_report_and_map(fake_tools, tmp_path):
 
     assert steps[0][0] < steps[-1][0] == 1.0
     assert result["qualidade"] == {}      # as notas de qualidade só vêm quando pedidas
+    assert result["recorte"]["segmentacoes"] == 1
     assert result["modelo"] == "male" and len(result["estruturas"]) == 10
     assert json.loads((out / "resultado.json").read_text(encoding="utf-8")) == result
     assert (out / "relatorio.pdf").read_bytes().startswith(b"%PDF")
@@ -108,6 +109,17 @@ def test_low_quality_score_becomes_a_warning(fake_tools, tmp_path, monkeypatch):
     result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=40, sex="F", quality=True)
     assert result["qualidade"]["hipocampo e amígdala"] == 0.41
     assert any("abaixo de 0,65" in w and "hipocampo e amígdala" in w for w in result["avisos"])
+
+
+def test_brain_at_the_edge_of_the_crop_makes_the_engine_widen_it_and_try_again(fake_tools, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_TOUCH_ONCE", str(tmp_path / "encostou"))
+    t1 = tmp_path / "t1.nii"
+    make_t1(t1)
+    first = volume.head_box(nib.load(str(t1)))
+    result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=40, sex="F")
+    assert result["recorte"]["segmentacoes"] == 2
+    assert result["recorte"]["inicio"][0] < first.low[0] and result["recorte"]["fim"] == list(first.high)
+    assert not any("encosta" in w for w in result["avisos"])     # na segunda vez não encostou
 
 
 def test_segmenter_failure_is_reported_with_its_log(fake_tools, tmp_path, monkeypatch):
@@ -182,11 +194,27 @@ def test_head_box_runs_from_the_scalp_top_down_18_cm(affine, shape):
     low, high = corners.min(0), corners.max(0)
     # Em cima: o topo da cabeça (115 mm) mais a folga; o artefato a 128 mm não conta. Embaixo: 18 cm abaixo do topo.
     assert 116 <= high[2] <= 124 and -70 <= low[2] <= -60
-    # Dos lados e atrás: a cabeça mais a folga. Na frente: até o nariz (128 mm), ou até onde a imagem vai.
+    # Dos lados, atrás e na frente: o contorno da cabeça na altura da calota mais a folga. O nariz
+    # (até 128 mm) fica de fora de propósito: ele não diz onde está o encéfalo.
     assert -92 <= low[0] <= -81 and 81 <= high[0] <= 92
-    assert -108 <= low[1] <= -96 and high[1] >= 127
-    trimmed, same = volume.trim_to_head(image)
-    assert same == box and trimmed.shape == box.shape
+    assert -108 <= low[1] <= -96 and 106 <= high[1] <= 116
+    assert volume.trim(image, box).shape == box.shape
+
+
+def test_brain_touching_the_box_is_detected_and_the_box_grows():
+    affine = np.array([[0, 0, 1.0, -30.0], [-1.0, 0, 0, 40.0], [0, -1.0, 0, 50.0], [0, 0, 0, 1]])   # "PIR"
+    image = nib.Nifti1Image(np.zeros((40, 50, 60), dtype=np.float32), affine)
+    labels = np.zeros((40, 50, 60), dtype=np.int16)
+    labels[10:30, 10:40, 10:50] = 2
+    assert volume.touching_faces(labels, image) == []
+    labels[0, 20, 30] = 3                # encosta na face de índice 0 do primeiro eixo: a da frente
+    labels[20, 49, 30] = 16              # embaixo (tronco): não conta
+    labels[20, 20, 59] = 24              # liquor de fora: não conta
+    faces = volume.touching_faces(labels, image)
+    assert faces == [(0, 0)] and volume.face_name(image, faces[0]) == "frente"
+    box = volume.Box((8, 0, 4), (48, 50, 64))
+    assert not volume.at_image_edge(box, (0, 0), (80, 50, 64)) and volume.at_image_edge(box, (1, 0), (80, 50, 64))
+    assert volume.grow(box, [(0, 0), (2, 1)], (2.0, 1.0, 1.0), (80, 50, 64)) == volume.Box((0, 0, 4), (48, 50, 64))
 
 
 def test_head_box_refuses_an_image_without_a_head():

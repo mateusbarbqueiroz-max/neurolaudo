@@ -32,6 +32,11 @@ labels = np.zeros(data.shape, np.int16)
 labels[data > 50] = 2
 labels[(data > 150) & (x < 0)] = 17      # x negativo em RAS = esquerda do paciente
 labels[(data > 150) & (x > 0)] = 53
+# Para testar o recorte que cresce: na primeira chamada, "córtex" encostado na primeira face do volume.
+marker = os.environ.get("FAKE_TOUCH_ONCE")
+if marker and not os.path.exists(marker):
+    Path(marker).write_text("feito")
+    labels[0, data.shape[1] // 2, data.shape[2] // 2] = 3
 nib.save(nib.Nifti1Image(labels, image.affine), args.o)
 shutil.copy(os.environ.get("FAKE_VOLUMES") or Path(__file__).with_name("fake_volumes.csv"), args.vol)
 if args.qc:

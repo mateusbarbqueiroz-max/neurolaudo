@@ -38,6 +38,7 @@ QC_THRESHOLD = 0.65          # abaixo disso os autores do SynthSeg tratam a segm
 MAX_VOXEL_MM = 1.5           # acima disso a série não é um T1 volumétrico fino
 PAGE_DPI = 150
 SEGMENT_TIMEOUT_S = 40 * 60
+MAX_ATTEMPTS = 3             # segmentações por exame: a primeira e até duas com recorte maior
 MODEL_FILES = ("synthseg_2.0.h5", "synthseg_qc_2.0.h5")
 
 Progress = Callable[[float, str], None]
@@ -161,36 +162,57 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
 
     say(0.05, "Localizando a cabeça")
     try:
-        trimmed, box = volume.trim_to_head(image)
+        box = volume.head_box(image)
     except volume.VolumeError as error:
         raise PipelineError(str(error)) from error
     trimmed_path = work / "t1_recortado.nii.gz"
-    nib.save(trimmed, str(trimmed_path))
-
-    say(0.10, "Segmentando (alguns minutos)")
     seg_path, vol_path, qc_path = work / "segmentacao.nii.gz", work / "volumes.csv", work / "qualidade.csv"
-    for stale in (seg_path, vol_path, qc_path):
-        stale.unlink(missing_ok=True)   # o SynthSeg acrescenta linhas a tabelas que já existem
     segment_started = time.monotonic()
-    command = [*tools.synthseg, "--i", str(trimmed_path), "--o", str(seg_path), "--vol", str(vol_path),
-               "--fast", "--cpu", "--keepgeom", "--noaddctab", "--threads", str(threads)]
-    if quality:
-        command += ["--qc", str(qc_path)]
-    _run(command, tools.env, work / "registro-synthseg.txt", "A segmentação (SynthSeg)", SEGMENT_TIMEOUT_S)
+    attempts = 0
+    while True:
+        attempts += 1
+        say(0.10 if attempts == 1 else 0.45, "Segmentando (alguns minutos)" if attempts == 1
+            else "Segmentando de novo, com recorte maior")
+        trimmed = volume.trim(image, box)
+        nib.save(trimmed, str(trimmed_path))
+        for stale in (seg_path, vol_path, qc_path):
+            stale.unlink(missing_ok=True)   # o SynthSeg acrescenta linhas a tabelas que já existem
+        command = [*tools.synthseg, "--i", str(trimmed_path), "--o", str(seg_path), "--vol", str(vol_path),
+                   "--fast", "--cpu", "--keepgeom", "--noaddctab", "--threads", str(threads)]
+        if quality:
+            command += ["--qc", str(qc_path)]
+        _run(command, tools.env, work / "registro-synthseg.txt", "A segmentação (SynthSeg)", SEGMENT_TIMEOUT_S)
+        for needed, what in ((seg_path, "a segmentação"), (vol_path, "a tabela de volumes")):
+            if not needed.is_file():
+                raise PipelineError(f"A segmentação terminou sem gravar {what}.")
+        try:
+            trimmed_labels = np.asarray(nib.load(str(seg_path)).dataobj)
+            labels = volume.paste_labels(image.shape, box, trimmed_labels)
+        except volume.VolumeError as error:
+            raise PipelineError(str(error)) from error
+        # O encéfalo encostou em alguma face do recorte? Então pode ter ficado um pedaço de fora:
+        # alarga a caixa desse lado e segmenta de novo (no máximo duas vezes).
+        touching = volume.touching_faces(trimmed_labels, trimmed)
+        growable = [face for face in touching if not volume.at_image_edge(box, face, image.shape)]
+        if not growable or attempts >= MAX_ATTEMPTS:
+            break
+        box = volume.grow(box, growable, zooms, image.shape)
     segment_seconds = time.monotonic() - segment_started
-    for needed, what in ((seg_path, "a segmentação"), (vol_path, "a tabela de volumes")):
-        if not needed.is_file():
-            raise PipelineError(f"A segmentação terminou sem gravar {what}.")
+    edge_notes = []
+    if touching:
+        sides = ", ".join(sorted({volume.face_name(trimmed, face) for face in touching}))
+        where = "da imagem" if all(volume.at_image_edge(box, face, image.shape) for face in touching) else "do recorte"
+        edge_notes.append(f"O encéfalo segmentado encosta na borda {where} ({sides}): parte dele pode ter ficado de fora, "
+                          "e os volumes podem estar subestimados.")
 
     say(0.85, "Comparando com a referência")
     try:
         volumes = read_volumes_csv(str(vol_path))
         assessment = assess(load_norms(), volumes, age=age, sex=sex)
         scores = read_volumes_csv(str(qc_path)) if qc_path.is_file() else {}
-        labels = volume.paste_labels(image.shape, box, np.asarray(nib.load(str(seg_path)).dataobj))
-    except (ValueError, volume.VolumeError) as error:
+    except ValueError as error:
         raise PipelineError(str(error)) from error
-    notes = list(series_notes) + quality_warnings(scores) + resolution_notes(zooms)
+    notes = list(series_notes) + edge_notes + quality_warnings(scores) + resolution_notes(zooms)
     footnotes = quality_summary(scores)
 
     say(0.90, "Montando o relatório")
@@ -218,7 +240,7 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
         "qualidade": {QC_TITLES_PT.get(k, k): round(v, 3) for k, v in scores.items()},
         "entrada": {"voxels": [int(v) for v in image.shape[:3]], "voxel_mm": [round(z, 3) for z in zooms],
                     "orientacao": volume.orientation(image)},
-        "recorte": {"inicio": list(box.low), "fim": list(box.high)},
+        "recorte": {"inicio": list(box.low), "fim": list(box.high), "segmentacoes": attempts},
         "paginas": page_files,
         "mapa": {"arquivo": "mapa.rgba", "cortes": int(color_map.shape[0]), "linhas": int(color_map.shape[1]),
                  "colunas": int(color_map.shape[2])},

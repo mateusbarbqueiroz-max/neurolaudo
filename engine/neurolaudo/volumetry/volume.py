@@ -66,16 +66,27 @@ def paste_labels(full_shape, box: Box, trimmed_labels: np.ndarray) -> np.ndarray
 
 # --- Caixa da cabeça -------------------------------------------------------------------------
 #
-# As normas foram ajustadas recortando cada imagem em volta do encéfalo com o SynthStrip. Esse
-# programa roda em PyTorch, que em Mac com Apple Silicon faz as convoluções 3D por um caminho que
-# pede dezenas de GB (no servidor Mac de teste, nem um recorte de 12 cm terminou em 20 minutos).
-# No lugar dele, o motor acha a cabeça direto na imagem: o topo do couro cabeludo e os 18 cm
-# abaixo dele, como faz o `robustfov` do FSL. A caixa fica um pouco maior que a das normas
-# (inclui orelhas e nariz); o efeito nos volumes é medido por scripts/validate_ixi.py.
+# As normas foram ajustadas recortando cada imagem em volta do encéfalo com o SynthStrip (caixa da
+# máscara mais 15 mm). Esse programa roda em PyTorch, que em Mac com Apple Silicon faz as
+# convoluções 3D por um caminho que pede dezenas de GB (no servidor Mac de teste, nem um recorte
+# de 12 cm terminou em 20 minutos). No lugar dele, o motor estima a mesma caixa direto na imagem:
+#
+# - de cima para baixo: do topo do couro cabeludo até 18 cm abaixo (como o `robustfov` do FSL);
+# - largura e comprimento: os da cabeça na altura da calota, acima das orelhas e do nariz. Ali o
+#   contorno da cabeça fica a cerca de 15 mm do encéfalo (liquor, osso e couro cabeludo), que é a
+#   margem das normas.
+#
+# Depois de segmentar, `touching_faces` confere se o encéfalo encostou em alguma face da caixa; se
+# encostou, o motor alarga a caixa e segmenta de novo.
 
 HEAD_HEIGHT_MM = 180.0       # do topo da cabeça para baixo: encéfalo, cerebelo e folga
-HEAD_MARGIN_MM = 5.0         # folga em volta da cabeça
+CALVARIUM_MM = (25.0, 100.0)  # faixa abaixo do topo onde se medem a largura e o comprimento
+HEAD_MARGIN_MM = 5.0         # folga em volta
+GROW_MM = 20.0               # quanto a caixa cresce de cada lado em que o encéfalo encostou
 _COARSE_MM = 4.0             # a cabeça é procurada em blocos de cerca de 4 mm, para o ruído não atrapalhar
+_SIDE_NAMES = {"R": "direita", "L": "esquerda", "A": "frente", "P": "trás", "S": "topo", "I": "base"}
+_OPPOSITE = {"R": "L", "L": "R", "A": "P", "P": "A", "S": "I", "I": "S"}
+CSF_LABEL = 24               # liquor fora do encéfalo: chega ao osso e não conta como encostar
 
 
 def _block_mean(data: np.ndarray, factors) -> np.ndarray:
@@ -103,70 +114,109 @@ def _otsu(values: np.ndarray) -> float:
     return float(centres[int(np.argmax(between))])
 
 
-def _bounds(counts: np.ndarray, minimum: int) -> tuple[int, int]:
-    present = np.flatnonzero(counts >= minimum)
-    return int(present[0]), int(present[-1])
+def _vertical(image) -> tuple[int, bool]:
+    """Qual índice do volume anda na vertical do paciente, e se cresce para cima."""
+    codes = nib.aff2axcodes(image.affine)
+    axis = next(a for a, code in enumerate(codes) if code in ("S", "I"))
+    return axis, codes[axis] == "S"
 
 
 def head_box(image, height_mm: float = HEAD_HEIGHT_MM, margin_mm: float = HEAD_MARGIN_MM) -> Box:
-    """Caixa da cabeça: do topo do couro cabeludo até `height_mm` abaixo, com a largura e o comprimento da cabeça."""
+    """Caixa em volta do encéfalo, estimada pelo contorno da cabeça (ver o comentário acima)."""
     data = np.asarray(image.dataobj, dtype=np.float32)
     zooms = voxel_sizes(image)
-    codes = nib.aff2axcodes(image.affine)
     factors = [max(1, int(round(_COARSE_MM / z))) for z in zooms]
     coarse = _block_mean(data, factors)
     if min(coarse.shape) < 4:
         raise VolumeError("volume pequeno demais para localizar a cabeça")
     # Metade do limiar de Otsu: prefere incluir um pouco de ar a deixar pele de fora.
     head = coarse > 0.5 * _otsu(coarse)
-
-    vertical = next(axis for axis, code in enumerate(codes) if code in ("S", "I"))
-    upward = codes[vertical] == "S"                       # o índice cresce para cima?
+    vertical, upward = _vertical(image)
+    if not upward:
+        head = np.flip(head, axis=vertical)               # daqui em diante o índice vertical cresce para cima
     step_mm = zooms[vertical] * factors[vertical]
     others = tuple(axis for axis in range(3) if axis != vertical)
-    per_slice = head.sum(axis=others)
-    if not upward:
-        per_slice = per_slice[::-1]                       # agora o índice 0 é o corte mais baixo
+
     # Topo: o corte mais alto com cabeça de verdade (uns 2 cm² ou mais) seguido de cortes também com cabeça.
-    solid = per_slice >= 12
-    top = None
-    for index in range(len(per_slice) - 1, -1, -1):
-        if solid[index] and solid[max(index - 2, 0): index + 1].all():
-            top = index
-            break
+    solid = head.sum(axis=others) >= 12
+    top = next((i for i in range(len(solid) - 1, -1, -1) if solid[max(i - 2, 0): i + 1].all()), None)
     if top is None:
         raise VolumeError("não encontrei a cabeça na imagem")
     bottom = max(0, top - int(round(height_mm / step_mm)) + 1)
 
-    # Largura e comprimento: a cabeça dentro dessa faixa, sem contar pontos soltos.
-    slab_index = [slice(None)] * 3
-    if upward:
-        slab_index[vertical] = slice(bottom, top + 1)
-    else:
-        size = head.shape[vertical]
-        slab_index[vertical] = slice(size - 1 - top, size - bottom)
-    slab = head[tuple(slab_index)]
+    def slab(first: int, last: int) -> np.ndarray:
+        index = [slice(None)] * 3
+        index[vertical] = slice(max(first, 0), last + 1)
+        return head[tuple(index)]
+
+    # Largura e comprimento: a cabeça na altura da calota. Se quase não há cabeça nessa faixa (imagem
+    # pequena ou cortada), vale a faixa inteira.
+    calvarium = slab(top - int(round(CALVARIUM_MM[1] / step_mm)), top - int(round(CALVARIUM_MM[0] / step_mm)))
+    region = calvarium if calvarium.sum() >= 200 else slab(bottom, top)
     low, high = [0, 0, 0], [0, 0, 0]
     for axis in others:
         rest = tuple(a for a in range(3) if a != axis)
-        first, last = _bounds(slab.sum(axis=rest), 3)
-        low[axis], high[axis] = first * factors[axis], (last + 1) * factors[axis]
-    span = slab_index[vertical]
-    low[vertical], high[vertical] = span.start * factors[vertical], span.stop * factors[vertical]
-
+        present = np.flatnonzero(region.sum(axis=rest) >= 3)
+        low[axis], high[axis] = int(present[0]) * factors[axis], (int(present[-1]) + 1) * factors[axis]
+    low[vertical], high[vertical] = bottom * factors[vertical], (top + 1) * factors[vertical]
+    # Folga em volta e em cima. Embaixo não: a faixa termina no pescoço, e o que vale é a altura.
     margins = [int(np.ceil(margin_mm / z)) for z in zooms]
-    low = [max(0, l - m) for l, m in zip(low, margins)]
-    high = [min(n, h + m) for h, m, n in zip(high, margins, data.shape[:3])]
-    # Para baixo não há folga a dar: a faixa já termina em tecido (pescoço), e a altura é o que vale.
-    if upward:
-        low[vertical] = max(0, span.start * factors[vertical])
-    else:
-        high[vertical] = min(data.shape[vertical], span.stop * factors[vertical])
+    for axis in range(3):
+        if axis != vertical:
+            low[axis] = max(0, low[axis] - margins[axis])
+        high[axis] = min(data.shape[axis], high[axis] + margins[axis])
+    if not upward:                                        # de volta ao sentido original do índice vertical
+        size = data.shape[vertical]
+        covered = head.shape[vertical] * factors[vertical]
+        base = size if low[vertical] == 0 else covered - low[vertical]
+        low[vertical], high[vertical] = max(0, covered - high[vertical]), min(size, base)
     return Box(tuple(int(v) for v in low), tuple(int(v) for v in high))
 
 
-def trim_to_head(image, height_mm: float = HEAD_HEIGHT_MM, margin_mm: float = HEAD_MARGIN_MM):
-    """Recorta a imagem na caixa da cabeça. Devolve (imagem recortada, caixa)."""
-    box = head_box(image, height_mm, margin_mm)
+def trim(image, box: Box):
+    """A imagem recortada na caixa (mesmas intensidades, mesma grade)."""
     a, b, c = box.slices
-    return image.slicer[a, b, c], box
+    return image.slicer[a, b, c]
+
+
+def touching_faces(labels: np.ndarray, image, depth: int = 2) -> list[tuple[int, int]]:
+    """Faces da caixa em que o encéfalo segmentado encosta: (índice, lado), lado 0 = começo, 1 = fim.
+
+    A face de baixo não conta: ali o tronco continua na medula. O liquor de fora do encéfalo também não.
+    `image` é a imagem recortada, na mesma grade dos rótulos.
+    """
+    brain = (labels > 0) & (labels != CSF_LABEL)
+    vertical, upward = _vertical(image)
+    faces = []
+    for axis in range(3):
+        for side in (0, 1):
+            if axis == vertical and side == (0 if upward else 1):
+                continue
+            index = [slice(None)] * 3
+            index[axis] = slice(0, depth) if side == 0 else slice(labels.shape[axis] - depth, None)
+            if brain[tuple(index)].any():
+                faces.append((axis, side))
+    return faces
+
+
+def face_name(image, face: tuple[int, int]) -> str:
+    """Nome do lado do paciente para onde a face olha: direita, esquerda, frente, trás, topo ou base."""
+    code = nib.aff2axcodes(image.affine)[face[0]]
+    return _SIDE_NAMES[code if face[1] == 1 else _OPPOSITE[code]]
+
+
+def at_image_edge(box: Box, face: tuple[int, int], shape) -> bool:
+    axis, side = face
+    return box.low[axis] == 0 if side == 0 else box.high[axis] == shape[axis]
+
+
+def grow(box: Box, faces, zooms, shape, mm: float = GROW_MM) -> Box:
+    """A caixa alargada em `mm` nas faces dadas, sem sair da imagem."""
+    low, high = list(box.low), list(box.high)
+    for axis, side in faces:
+        step = int(np.ceil(mm / zooms[axis]))
+        if side == 0:
+            low[axis] = max(0, low[axis] - step)
+        else:
+            high[axis] = min(int(shape[axis]), high[axis] + step)
+    return Box(tuple(low), tuple(high))
