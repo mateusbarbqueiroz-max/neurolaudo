@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import csv
 
-from neurolaudo.volumetry.norms import Assessment
-from neurolaudo.volumetry.report import DISCLAIMER, flag_text, percentile_text
+from neurolaudo.volumetry.norms import Assessment, asymmetry_percent
+from neurolaudo.volumetry.report import DISCLAIMER, br, flag_text, percentile_text
 
 QC_TITLES_PT = {
     "general white matter": "substância branca",
@@ -51,10 +51,56 @@ def read_volumes_csv(path: str, row: str | None = None) -> dict[str, float]:
     return values
 
 
+def _volume(ml: float) -> str:
+    return br(ml, 0) if ml >= 100 else br(ml, 1)
+
+
+def hippocampal_asymmetry_text(assessment: Assessment) -> str:
+    try:
+        value = asymmetry_percent(assessment.result("hippocampus_left").volume_mm3,
+                                  assessment.result("hippocampus_right").volume_mm3)
+    except (KeyError, ValueError):
+        return ""
+    return f"Assimetria dos hipocampos de {br(abs(value), 1)} % ({'esquerdo' if value > 0 else 'direito'} maior)."
+
+
+def summary_lines(assessment: Assessment) -> list[str]:
+    """Uma linha por estrutura, para mostrar na tela."""
+    lines = []
+    for r in assessment.results:
+        line = f"{r.structure.title}: {_volume(r.volume_ml)} mL"
+        if r.percentile is not None:
+            line += f", percentil {percentile_text(r)}"
+        if r.flag:
+            line += f"  {flag_text(r)}"
+        lines.append(line)
+    lines.append(f"Volume intracraniano total: {_volume(assessment.icv_mm3 / 1000.0)} mL")
+    return lines
+
+
+def report_sentence(assessment: Assessment) -> str:
+    """Parágrafo pronto para colar no laudo, com a ressalva de uso em pesquisa."""
+    parts = []
+    for r in assessment.results:
+        part = f"{r.structure.title.lower()} {_volume(r.volume_ml)} mL"
+        if r.percentile is not None:
+            part += f" (percentil {percentile_text(r)})"
+        parts.append(part)
+    basis = "percentis para a idade e o sexo" if assessment.model_key != "all" else "percentis para a idade"
+    if assessment.age is None:
+        basis = "sem percentis, idade não informada"
+    text = (f"Volumetria cerebral automática (SynthSeg 2.0; {basis}; uso em pesquisa, não validada para diagnóstico): "
+            + ", ".join(parts) + f"; volume intracraniano total {_volume(assessment.icv_mm3 / 1000.0)} mL.")
+    asymmetry = hippocampal_asymmetry_text(assessment)
+    return text + (" " + asymmetry if asymmetry else "")
+
+
 def result_json(assessment: Assessment) -> dict:
     """O resultado em forma de dados, para o complemento do IsiX mostrar."""
     return {
         "aviso": DISCLAIMER,
+        "resumo": summary_lines(assessment),
+        "frase_laudo": report_sentence(assessment),
         "referencia": assessment.norms.description,
         "idade": assessment.age,
         "modelo": assessment.model_key,

@@ -24,14 +24,16 @@ from neurolaudo.volumetry.pipeline import find_tools
 from neurolaudo.volumetry.tables import read_volumes_csv
 
 # nome, opções extras do mri_synthseg, variáveis de ambiente extras
+NO_DNN = {"TF_ENABLE_ONEDNN_OPTS": "0"}   # o TensorFlow do Mac com Apple Silicon não tem oneDNN
 CONFIGS = [
     ("A normas: --fast --cpu, 1 núcleo", [], {}),
+    ("G  A sem oneDNN", [], NO_DNN),
+    ("H  G com 4 núcleos", ["--threads", "4"], NO_DNN),
+    ("I  H com --keepgeom", ["--threads", "4", "--keepgeom"], NO_DNN),
     ("B  A com 4 núcleos", ["--threads", "4"], {}),
     ("C  B com notas de qualidade", ["--threads", "4", "--qc", "QC"], {}),
-    ("D  C com --keepgeom (motor atual)", ["--threads", "4", "--qc", "QC", "--keepgeom", "--noaddctab"], {}),
-    ("E  D sem oneDNN", ["--threads", "4", "--qc", "QC", "--keepgeom", "--noaddctab"], {"TF_ENABLE_ONEDNN_OPTS": "0"}),
-    ("F  D com 2 núcleos", ["--threads", "2", "--qc", "QC", "--keepgeom", "--noaddctab"], {}),
-    ("G  A sem oneDNN", [], {"TF_ENABLE_ONEDNN_OPTS": "0"}),
+    ("D  C com --keepgeom (motor atual)", ["--threads", "4", "--qc", "QC", "--keepgeom"], {}),
+    ("E  D sem oneDNN", ["--threads", "4", "--qc", "QC", "--keepgeom"], NO_DNN),
 ]
 
 
@@ -60,7 +62,7 @@ def main(argv: list[str]) -> int:
         folder.mkdir(exist_ok=True)
         options = [str(folder / "qc.csv") if o == "QC" else o for o in extra]
         command = ["/usr/bin/time", "-v", *tools.synthseg, "--i", str(trimmed_path), "--o", str(folder / "seg.nii.gz"),
-                   "--vol", str(folder / "vol.csv"), "--fast", "--cpu", *options]
+                   "--vol", str(folder / "vol.csv"), "--fast", "--cpu", "--noaddctab", *options]
         run_env = dict(env)
         run_env.update(extra_env)
         started = time.monotonic()
@@ -70,6 +72,8 @@ def main(argv: list[str]) -> int:
         memory = f"{int(peak.group(1)) / 1e6:6.1f} GB" if peak else "       ?"
         if done.returncode != 0 or not (folder / "vol.csv").is_file():
             reason = "bad_alloc (faltou memória)" if "bad_alloc" in done.stderr else f"código {done.returncode}"
+            if "bad_alloc" not in done.stderr:
+                print("   " + " | ".join((done.stdout + done.stderr).strip().splitlines()[-4:])[:600], flush=True)
             print(f"{label:36s} {seconds:6.0f}s {memory}  FALHOU: {reason}", flush=True)
             continue
         measured = read_volumes_csv(str(folder / "vol.csv"))

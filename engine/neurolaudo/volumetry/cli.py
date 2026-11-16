@@ -34,12 +34,15 @@ def run_report(args: argparse.Namespace) -> int:
     return 0
 
 
-def _header_and_subject(args: argparse.Namespace) -> tuple[ReportHeader, float | None, str | None]:
-    """Cabeçalho, idade e sexo: do arquivo --cabecalho, com as opções da linha de comando por cima."""
-    data: dict = {}
+def _read_header_file(args: argparse.Namespace) -> dict:
     if getattr(args, "cabecalho", None):
         with open(args.cabecalho, encoding="utf-8") as fh:
-            data = json.load(fh)
+            return json.load(fh)
+    return {}
+
+
+def _header_and_subject(args: argparse.Namespace, data: dict) -> tuple[ReportHeader, float | None, str | None]:
+    """Cabeçalho, idade e sexo: do arquivo --cabecalho, com as opções da linha de comando por cima."""
     def pick(option: str, key: str):
         value = getattr(args, option, None)
         return value if value not in (None, "") else data.get(key)
@@ -53,12 +56,19 @@ def _header_and_subject(args: argparse.Namespace) -> tuple[ReportHeader, float |
 def run_exam_command(args: argparse.Namespace) -> int:
     from neurolaudo.volumetry.pipeline import run_exam
 
-    header, age, sex = _header_and_subject(args)
+    data = _read_header_file(args)
+    header, age, sex = _header_and_subject(args, data)
 
     def progress(fraction: float, message: str) -> None:
         print(f"PROGRESSO {fraction:.2f} {message}", flush=True)
+        if args.progresso:   # para o complemento do IsiX acompanhar sem ler a saída do programa
+            temporary = args.progresso + ".novo"
+            with open(temporary, "w", encoding="utf-8") as fh:
+                fh.write(f"{fraction:.2f}\t{message}\n")
+            os.replace(temporary, args.progresso)
 
-    result = run_exam(args.nifti, args.saida, age=age, sex=sex, header=header, threads=args.nucleos, progress=progress)
+    result = run_exam(args.nifti, args.saida, age=age, sex=sex, header=header, threads=args.nucleos, progress=progress,
+                      series_notes=[str(n) for n in data.get("avisos", [])])
     flagged = [e["nome"] for e in result["estruturas"] if e["marca"]]
     print(f"Volumetria gravada em {args.saida}. Fora da faixa de 5 a 95: {', '.join(flagged) if flagged else 'nenhuma estrutura'}.")
     for warning in result["avisos"]:
@@ -101,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     exam.add_argument("--saida", required=True, help="pasta de saída")
     exam.add_argument("--cabecalho", help="arquivo JSON com nome, id, data, serie, idade e sexo (evita nomes na linha de comando)")
     exam.add_argument("--nucleos", type=int, help="núcleos do processador a usar (padrão: até 8)")
+    exam.add_argument("--progresso", help="arquivo onde gravar o andamento (fração e mensagem)")
     _add_header_options(exam)
     exam.set_defaults(run=run_exam_command)
 

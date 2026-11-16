@@ -169,12 +169,20 @@ def test_command_line_reads_the_header_file(fake_tools, tmp_path, capsys):
     t1, out, header = tmp_path / "t1.nii", tmp_path / "saida", tmp_path / "cabecalho.json"
     make_t1(t1)
     header.write_text(json.dumps({"nome": "Fantoma", "id": "000002", "idade": 68.6, "sexo": "M", "data": "20261115",
-                                  "serie": "SAG T1 MPRAGE"}), encoding="utf-8")
-    assert cli.main(["exame", "--nifti", str(t1), "--saida", str(out), "--cabecalho", str(header)]) == 0
+                                  "serie": "SAG T1 MPRAGE", "avisos": ["A série parece ter contraste."]}), encoding="utf-8")
+    progress = tmp_path / "andamento.txt"
+    assert cli.main(["exame", "--nifti", str(t1), "--saida", str(out), "--cabecalho", str(header),
+                     "--progresso", str(progress)]) == 0
     printed = capsys.readouterr().out
     assert "PROGRESSO 1.00 Pronto" in printed and "Uso em pesquisa" in printed
+    assert progress.read_text(encoding="utf-8") == "1.00\tPronto\n"
     result = json.loads((out / "resultado.json").read_text(encoding="utf-8"))
     assert result["modelo"] == "male" and result["idade"] == 68.6
+    assert "A série parece ter contraste." in result["avisos"]
+    assert result["resumo"][0].startswith("Hipocampo esquerdo: 3,7 mL, percentil 2")
+    assert result["frase_laudo"].startswith("Volumetria cerebral automática (SynthSeg 2.0; percentis para a idade e o sexo;")
+    assert "hipocampo direito 3,2 mL (percentil < 1)" in result["frase_laudo"]
+    assert result["frase_laudo"].endswith("Assimetria dos hipocampos de 14,4 % (esquerdo maior).")
     assert cli.main(["verificar"]) == 0
 
 

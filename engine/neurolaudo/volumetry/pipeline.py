@@ -129,8 +129,11 @@ def _write_raw(path: Path, array: np.ndarray) -> None:
 
 def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
              header: report.ReportHeader | None = None, threads: int | None = None, tools: Tools | None = None,
-             progress: Progress | None = None) -> dict:
-    """Roda a volumetria de um volume T1 e grava os resultados em `out_dir`. Devolve o conteúdo de resultado.json."""
+             progress: Progress | None = None, series_notes=()) -> dict:
+    """Roda a volumetria de um volume T1 e grava os resultados em `out_dir`. Devolve o conteúdo de resultado.json.
+
+    `series_notes`: avisos sobre a série vindos de quem chamou (por exemplo, "série com contraste").
+    """
     say = progress or (lambda fraction, message: None)
     started = time.monotonic()
     header = header or report.ReportHeader()
@@ -183,7 +186,7 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
         labels = volume.paste_labels(image.shape, box, np.asarray(nib.load(str(seg_path)).dataobj))
     except (ValueError, volume.VolumeError) as error:
         raise PipelineError(str(error)) from error
-    notes = quality_warnings(scores) + resolution_notes(zooms)
+    notes = list(series_notes) + quality_warnings(scores) + resolution_notes(zooms)
     footnotes = quality_summary(scores)
 
     say(0.90, "Montando o relatório")
