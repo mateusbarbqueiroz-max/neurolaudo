@@ -181,6 +181,21 @@ Particularidade do servidor: as janelas do IsiX existem, mas só aparecem na tel
 depois do comando de menu Window > Tile 2D Viewer Windows (o aplicativo é aberto
 em segundo plano). As capturas ficam na versão `teste-isix` do repositório.
 
-Ainda não exercitado dentro do IsiX: as medidas com linhas desenhadas (Evans,
-linha média, ABC/2), o painel do ASPECTS, o protocolo em exame de RM e a
-comparação com exame anterior. Esses têm testes em Linux contra a imitação do kit.
+Conferido em 16/11/2026, no mesmo servidor:
+
+- **Medidas.** O autoteste do complemento (`Glue/SelfTest.swift`, comando que só
+  existe com `-NeuroLaudoAutoteste YES`) desenhou as marcas pelo kit e leu de
+  volta: 5 de 5 conferências passaram.
+  - Linha de 120 mm: NeuroLaudo 120,00 mm e a medida do próprio IsiX 120,00 mm.
+  - Índice de Evans 0,35; desvio da linha média 6,0 mm para a esquerda, com as
+    marcas rotuladas; ABC/2 6,00 mL (intervalo entre cortes de 2,50 mm lido da
+    série); janela 600/2800 aplicada e lida de volta.
+- **Protocolo de RM.** Ao chegar o exame de teste de RM, o complemento abriu as
+  seis séries na ordem FLAIR, difusão, ADC, SWI, T1 e T1 pós-contraste; captura
+  de tela com as seis janelas lado a lado.
+- **Comparação com exame anterior.** Com um exame anterior do mesmo paciente no
+  banco, o comando abriu a série equivalente (de oito para nove janelas).
+
+Ainda não exercitado dentro do IsiX: o painel do ASPECTS e os avisos com botão
+Copiar (telas), as medidas com linhas desenhadas à mão e exames reais, cujos
+nomes de série podem diferir dos do exame de teste.
