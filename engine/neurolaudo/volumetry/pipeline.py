@@ -96,18 +96,22 @@ def _run(command, env: Mapping[str, str], log_path: Path, what: str, timeout: in
         raise PipelineError(f"{what} falhou (código {done.returncode}). Fim do registro:\n{tail}")
 
 
-def quality_notes(scores: Mapping[str, float]) -> list[str]:
-    """Frases sobre as notas automáticas de qualidade do SynthSeg (0 a 1)."""
+def quality_summary(scores: Mapping[str, float]) -> list[str]:
+    """Frase de rodapé com a menor nota automática de qualidade do SynthSeg (0 a 1)."""
     if not scores:
         return []
     worst = min(scores, key=scores.get)  # type: ignore[arg-type]
-    notes = [f"Nota automática de qualidade da segmentação (0 a 1): a menor foi {report.br(scores[worst], 2)}, em "
-             f"{QC_TITLES_PT.get(worst, worst)}."]
+    return [f"Nota automática de qualidade da segmentação (0 a 1): a menor foi {report.br(scores[worst], 2)}, em "
+            f"{QC_TITLES_PT.get(worst, worst)}."]
+
+
+def quality_warnings(scores: Mapping[str, float]) -> list[str]:
+    """Aviso quando alguma nota de qualidade fica abaixo do limite."""
     low = [QC_TITLES_PT.get(k, k) for k, v in scores.items() if v < QC_THRESHOLD]
-    if low:
-        notes.append(f"Atenção: nota de qualidade abaixo de {report.br(QC_THRESHOLD, 2)} em {', '.join(low)}. "
-                     "Confira a página de conferência antes de usar os números.")
-    return notes
+    if not low:
+        return []
+    return [f"Nota automática de qualidade abaixo de {report.br(QC_THRESHOLD, 2)} em {', '.join(low)}. "
+            "Confira a página de conferência antes de usar os números."]
 
 
 def resolution_notes(zooms) -> list[str]:
@@ -179,10 +183,11 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
         labels = volume.paste_labels(image.shape, box, np.asarray(nib.load(str(seg_path)).dataobj))
     except (ValueError, volume.VolumeError) as error:
         raise PipelineError(str(error)) from error
-    notes = quality_notes(scores) + resolution_notes(zooms)
+    notes = quality_warnings(scores) + resolution_notes(zooms)
+    footnotes = quality_summary(scores)
 
     say(0.90, "Montando o relatório")
-    pages = [report.build_figure(assessment, header, notes),
+    pages = [report.build_figure(assessment, header, notes, footnotes),
              overlay.montage_figure(image, labels, report.patient_line(assessment, header))]
     page_files = []
     try:

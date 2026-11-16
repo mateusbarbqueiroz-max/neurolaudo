@@ -16,6 +16,10 @@ permissions:
   contents: write
 
 env:
+  # Voluntários do banco público IXI, na ordem em que aparecem no arquivo (dois hospitais).
+  SUJEITOS: >-
+    IXI002-Guys-0828-T1 IXI012-HH-1211-T1 IXI013-HH-1212-T1 IXI014-HH-1236-T1
+    IXI015-HH-1258-T1 IXI016-Guys-0697-T1 IXI017-Guys-0698-T1 IXI019-Guys-0702-T1
   SUJEITO: IXI002-Guys-0828-T1
   IDADE: "35.8"
   SEXO: F
@@ -35,30 +39,22 @@ jobs:
           time NEUROLAUDO_FONTE="$GITHUB_WORKSPACE/engine" bash mac/instalar-volumetria.sh
           du -sh "$NEUROLAUDO_MOTOR"
 
-      - name: Baixar o T1 público
+      - name: Baixar os T1 públicos
         run: |
           mkdir -p "$RUNNER_TEMP/ixi" && cd "$RUNNER_TEMP/ixi"
-          # O arquivo é um .tar de 4,5 GB; lê só até achar o primeiro exame.
+          # O arquivo é um .tar de 4,5 GB em ordem alfabética; lê só até achar os primeiros exames.
           curl -sL --max-time 900 http://biomedic.doc.ic.ac.uk/brain-development/downloads/IXI/IXI-T1.tar \
-            | tar -xf - --occurrence=1 "$SUJEITO.nii.gz" || true
+            | tar -xf - --occurrence=1 $(for s in $SUJEITOS; do printf '%s.nii.gz ' "$s"; done) || true
           ls -la
-          test -s "$SUJEITO.nii.gz"
+          test "$(ls *.nii.gz | wc -l)" -ge 1
 
-      - name: Rodar a volumetria
+      - name: Rodar a volumetria e comparar com os volumes publicados
         run: |
           nproc; free -g | head -2
-          /usr/bin/time -v "$NEUROLAUDO_MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli exame \
-            --nifti "$RUNNER_TEMP/ixi/$SUJEITO.nii.gz" --saida "$RUNNER_TEMP/saida" \
-            --idade "$IDADE" --sexo "$SEXO" --nome "Voluntário público IXI002" --serie "T1 (banco público IXI)" \
-            2> "$RUNNER_TEMP/tempo.txt" || { cat "$RUNNER_TEMP/tempo.txt"; tail -40 "$RUNNER_TEMP"/saida/trabalho/registro-*.txt; exit 1; }
+          /usr/bin/time -v "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/validate_ixi.py \
+            "$RUNNER_TEMP/ixi" engine/tests/data/brainquant_ixi_volumes.csv "$RUNNER_TEMP/saida" \
+            2> "$RUNNER_TEMP/tempo.txt" || { tail -30 "$RUNNER_TEMP/tempo.txt"; exit 1; }
           grep -E "Elapsed|Maximum resident" "$RUNNER_TEMP/tempo.txt"
-          cat "$RUNNER_TEMP/saida/resultado.json"
-
-      - name: Comparar com os volumes publicados
-        run: |
-          "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/compare_reference.py \
-            "$RUNNER_TEMP/saida/trabalho/volumes.csv" engine/tests/data/brainquant_ixi_volumes.csv "$SUJEITO" 2.0 \
-            | tee "$RUNNER_TEMP/saida/comparacao.txt"
 
       - name: Publicar o resultado
         if: always()
@@ -67,10 +63,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p "$RUNNER_TEMP/publicar" && cd "$RUNNER_TEMP/publicar"
-          for f in relatorio.png conferencia.png relatorio.pdf resultado.json comparacao.txt; do
+          for f in relatorio.png conferencia.png relatorio.pdf resultado.json validacao.txt; do
             [ -f "$RUNNER_TEMP/saida/$f" ] && cp "$RUNNER_TEMP/saida/$f" "linux-$f"
           done
-          for f in "$RUNNER_TEMP"/saida/trabalho/registro-*.txt "$RUNNER_TEMP/tempo.txt"; do
+          for f in "$RUNNER_TEMP/tempo.txt"; do
             [ -f "$f" ] && cp "$f" "linux-$(basename "$f")"
           done
           ls -la

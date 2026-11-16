@@ -20,7 +20,7 @@ import numpy as np  # noqa: E402
 from matplotlib import patheffects  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
-from neurolaudo.volumetry.report import DISCLAIMER, INK, INK_SECONDARY, SURFACE  # noqa: E402
+from neurolaudo.volumetry.report import DISCLAIMER, INK, INK_SECONDARY, SURFACE, draw_page_title  # noqa: E402
 
 # Rótulo do SynthSeg -> (R, G, B, opacidade). Rótulos fora da tabela ficam sem cor.
 LABEL_STYLE: dict[int, tuple[int, int, int, float]] = {
@@ -158,8 +158,7 @@ def montage_figure(image, labels: np.ndarray, title_line: str = ""):
     outlined = [patheffects.withStroke(linewidth=2.0, foreground="black")]
     fig = plt.figure(figsize=(8.27, 11.69), facecolor=SURFACE)
     left, right = 0.08, 0.92
-    fig.text(left, 0.955, "Conferência da segmentação", fontsize=16, fontweight="bold", color=INK, va="top")
-    fig.text(right, 0.955, DISCLAIMER, fontsize=8.5, fontweight="bold", color=INK, va="top", ha="right")
+    draw_page_title(fig, "Conferência da segmentação", left, right)
     if title_line:
         fig.text(left, 0.925, title_line, fontsize=9.5, color=INK, va="top")
     fig.text(left, 0.906, "As cores mostram o que foi medido. Confira se cada estrutura está no lugar e do lado certo.",

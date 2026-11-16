@@ -34,9 +34,23 @@ def test_page_has_a_table_and_one_chart_per_structure(assessment):
         texts = " ".join(t.get_text() for t in fig.texts)
         assert "Volumetria cerebral" in texts and DISCLAIMER in texts
         titles = [ax.get_title(loc="left") for ax in fig.axes[1:]]
-        assert titles[0] == "Hipocampo E" and "Ventrículos laterais" in titles
+        assert titles[0] == "Hipocampo E" and "Ventrículos lat." in titles
     finally:
         plt.close(fig)
+
+
+def test_exam_warnings_are_shown_next_to_the_table(assessment):
+    plain = build_figure(assessment, ReportHeader())
+    warned = build_figure(assessment, ReportHeader(), notes=["Aviso de teste sobre a série."], footnotes=["Nota de rodapé."])
+    try:
+        texts = [t.get_text() for t in warned.texts]
+        assert "Aviso de teste sobre a série." in texts and "Nota de rodapé." in texts
+        # Os gráficos descem para dar lugar ao aviso, sem sair da página.
+        top = lambda fig: max(ax.get_position().y1 for ax in fig.axes[1:])
+        assert 0.3 < top(warned) < top(plain)
+    finally:
+        plt.close(plain)
+        plt.close(warned)
 
 
 def test_pdf_and_image_outputs(assessment, tmp_path):

@@ -23,6 +23,9 @@ from matplotlib.ticker import MaxNLocator, ScalarFormatter  # noqa: E402
 
 from neurolaudo.volumetry.norms import Assessment, StructureResult, asymmetry_percent  # noqa: E402
 
+# A fonte que acompanha o matplotlib: a página sai igual em Linux e no Mac, sem depender das fontes instaladas.
+plt.rcParams["font.family"] = ["DejaVu Sans"]
+
 DISCLAIMER = "Uso em pesquisa. Não validado para diagnóstico."
 
 # Cores: um só tom para as faixas (clara = 5 a 95, escura = 25 a 75), tinta para o
@@ -45,9 +48,9 @@ SHORT_TITLES = {
     "amygdala_right": "Amígdala D",
     "thalamus_left": "Tálamo E",
     "thalamus_right": "Tálamo D",
-    "lateral_ventricles": "Ventrículos laterais",
+    "lateral_ventricles": "Ventrículos lat.",
     "cortical_grey_matter": "Córtex cerebral",
-    "cerebral_white_matter": "Subst. branca cerebral",
+    "cerebral_white_matter": "Subst. branca",
     "whole_brain": "Encéfalo",
 }
 
@@ -173,13 +176,22 @@ def _draw_chart(ax, result: StructureResult, assessment: Assessment) -> None:
     ax.set_xlim(low - 1, high + 1)
 
 
-def build_figure(assessment: Assessment, header: ReportHeader, notes=()):
-    """Monta a página do relatório (A4 em pé). `notes`: avisos do exame, mostrados no rodapé."""
+def draw_page_title(fig, title: str, left: float = 0.08, right: float = 0.92) -> None:
+    """Título da página, com o aviso de uso em pesquisa acima dele, à direita."""
+    fig.text(right, 0.978, DISCLAIMER, fontsize=8.5, fontweight="bold", color=INK, va="top", ha="right")
+    fig.text(left, 0.955, title, fontsize=16, fontweight="bold", color=INK, va="top")
+
+
+def build_figure(assessment: Assessment, header: ReportHeader, notes=(), footnotes=()):
+    """Monta a página do relatório (A4 em pé).
+
+    `notes`: avisos do exame, mostrados em destaque logo abaixo da tabela, junto com os da avaliação.
+    `footnotes`: informações do exame para o rodapé.
+    """
     fig = plt.figure(figsize=(8.27, 11.69), facecolor=SURFACE)
     left, right = 0.08, 0.92
 
-    fig.text(left, 0.955, "Volumetria cerebral", fontsize=16, fontweight="bold", color=INK, va="top")
-    fig.text(right, 0.955, DISCLAIMER, fontsize=8.5, fontweight="bold", color=INK, va="top", ha="right")
+    draw_page_title(fig, "Volumetria cerebral", left, right)
     age = "idade não informada" if assessment.age is None else f"{br(assessment.age, 0)} anos"
     who = " · ".join(x for x in [header.patient_name, f"ID {header.patient_id}" if header.patient_id else "",
                                  age, f"sexo {_sex_text(assessment.model_key)}"] if x)
@@ -192,23 +204,33 @@ def build_figure(assessment: Assessment, header: ReportHeader, notes=()):
     table_ax = fig.add_axes([left, 0.615, right - left, 0.265])
     _draw_table(table_ax, assessment)
 
+    cursor = 0.598
     try:
         asym = asymmetry_percent(assessment.result("hippocampus_left").volume_mm3,
                                  assessment.result("hippocampus_right").volume_mm3)
         side = "esquerdo maior" if asym > 0 else "direito maior"
-        fig.text(left, 0.598, f"Assimetria dos hipocampos: {br(abs(asym), 1)} % ({side}).", fontsize=8.5, color=INK, va="top")
+        fig.text(left, cursor, f"Assimetria dos hipocampos: {br(abs(asym), 1)} % ({side}).", fontsize=8.5, color=INK, va="top")
     except (KeyError, ValueError):
         pass
+    cursor -= 0.021
+    # Avisos do exame: perto da tabela, onde são lidos. Os gráficos encolhem para dar lugar.
+    for warning in list(assessment.warnings) + list(notes):
+        for n, piece in enumerate(textwrap.wrap(warning, 112)):
+            if n == 0:
+                fig.text(left, cursor, "!", fontsize=8, color=ALERT, va="top", fontweight="bold")
+            fig.text(left + 0.012, cursor, piece, fontsize=8, color=INK, va="top")
+            cursor -= 0.0145
+        cursor -= 0.002
 
     handles = [Patch(facecolor=BAND_WIDE, label="percentis 5 a 95"), Patch(facecolor=BAND_NARROW, label="percentis 25 a 75"),
                Line2D([0], [0], color=MEDIAN, linewidth=1.4, label="mediana"),
                Line2D([0], [0], marker="o", color=INK, markeredgecolor=SURFACE, markersize=7, linestyle="none", label="paciente"),
                Line2D([0], [0], marker="o", color=ALERT, markeredgecolor=SURFACE, markersize=7, linestyle="none",
                       label="paciente, fora de 5 a 95")]
-    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(left - 0.008, 0.572), ncol=5, frameon=False, fontsize=7.5,
-               labelcolor=INK_SECONDARY, handlelength=1.6, columnspacing=1.4)
+    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(left - 0.008, cursor - 0.005), ncol=5, frameon=False,
+               fontsize=7.5, labelcolor=INK_SECONDARY, handlelength=1.6, columnspacing=1.4)
 
-    grid = fig.add_gridspec(2, 5, left=left, right=right, top=0.505, bottom=0.205, wspace=0.42, hspace=0.55)
+    grid = fig.add_gridspec(2, 5, left=left, right=right, top=cursor - 0.072, bottom=0.205, wspace=0.42, hspace=0.55)
     for index, result in enumerate(assessment.results[:10]):
         ax = fig.add_subplot(grid[index // 5, index % 5])
         _draw_chart(ax, result, assessment)
@@ -224,10 +246,10 @@ def build_figure(assessment: Assessment, header: ReportHeader, notes=()):
              f"{br(assessment.norms.reference_icv_mm3 / 1000.0, 0)} mL.",
              "Limites: entre aparelhos o resultado pode deslocar até cerca de 0,5 desvio-padrão; "
              "medida de um único momento, não mede perda ao longo do tempo."]
-    lines += list(assessment.warnings) + list(notes)
+    lines += list(footnotes)
     y = 0.165
     for line in lines:
-        for piece in textwrap.wrap(line, 125):
+        for piece in textwrap.wrap(line, 118):
             fig.text(left, y, piece, fontsize=7.5, color=INK_SECONDARY, va="top")
             y -= 0.015
         y -= 0.004
@@ -259,16 +281,16 @@ def figure_rgba(fig, dpi: int = 150) -> np.ndarray:
     return np.ascontiguousarray(np.asarray(fig.canvas.buffer_rgba()))
 
 
-def save_pdf(path: str, assessment: Assessment, header: ReportHeader, notes=()) -> None:
-    fig = build_figure(assessment, header, notes)
+def save_pdf(path: str, assessment: Assessment, header: ReportHeader, notes=(), footnotes=()) -> None:
+    fig = build_figure(assessment, header, notes, footnotes)
     try:
         save_figures_pdf(path, [fig])
     finally:
         plt.close(fig)
 
 
-def save_png(path: str, assessment: Assessment, header: ReportHeader, dpi: int = 150, notes=()) -> None:
-    fig = build_figure(assessment, header, notes)
+def save_png(path: str, assessment: Assessment, header: ReportHeader, dpi: int = 150, notes=(), footnotes=()) -> None:
+    fig = build_figure(assessment, header, notes, footnotes)
     try:
         fig.savefig(path, format="png", dpi=dpi, facecolor=fig.get_facecolor())
     finally:
