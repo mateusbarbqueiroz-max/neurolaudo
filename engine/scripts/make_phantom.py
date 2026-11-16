@@ -144,9 +144,77 @@ def write_mr_pair(out: str) -> None:
     write_mr_study(os.path.join(out, "atual"), "20261115", accession="RM1")
 
 
+def t1_volume(slices=96, rows=112, columns=128, spacing=1.25):
+    """T1 volumétrico sintético, como uma série sagital. Devolve (pixels por corte, posição x de cada corte, y0, z0).
+
+    Sistema LPS do DICOM: +x esquerda do paciente, +y posterior, +z superior. Um elipsoide faz de
+    encéfalo (valor 100) e duas esferas fazem de hipocampos (valor 200): a ESQUERDA é a maior.
+    """
+    x = (np.arange(slices) - (slices - 1) / 2) * spacing            # da direita (-) para a esquerda (+)
+    y0 = -(columns - 1) / 2 * spacing                               # coluna 0 é a mais anterior
+    z0 = (rows - 1) / 2 * spacing                                   # linha 0 é a mais alta
+    X = x[:, None, None]
+    Z = (z0 - np.arange(rows) * spacing)[None, :, None]
+    Y = (y0 + np.arange(columns) * spacing)[None, None, :]
+    data = np.full((slices, rows, columns), 5, dtype=np.uint16)
+    data[(X / 55) ** 2 + ((Y - 5) / 68) ** 2 + (Z / 55) ** 2 <= 1] = 100
+    data[(X - 25) ** 2 + Y ** 2 + (Z + 5) ** 2 <= 9 ** 2] = 200      # esquerda, maior
+    data[(X + 25) ** 2 + Y ** 2 + (Z + 5) ** 2 <= 5 ** 2] = 200      # direita, menor
+    return data, x, y0, z0
+
+
+def write_t1_study(out: str, study_date="20261116", spacing=1.25) -> list[str]:
+    """Grava um exame de RM com uma série T1 volumétrica sagital, para testar a volumetria sem paciente."""
+    data, x, y0, z0 = t1_volume(spacing=spacing)
+    study, series_uid, frame = generate_uid(), generate_uid(), generate_uid()
+    os.makedirs(out, exist_ok=True)
+    paths = []
+    for k in range(data.shape[0]):
+        meta = FileMetaDataset()
+        meta.MediaStorageSOPClassUID = MRImageStorage
+        meta.MediaStorageSOPInstanceUID = generate_uid()
+        meta.TransferSyntaxUID = ExplicitVRLittleEndian
+        ds = Dataset()
+        ds.file_meta = meta
+        ds.SOPClassUID = MRImageStorage
+        ds.SOPInstanceUID = meta.MediaStorageSOPInstanceUID
+        ds.StudyInstanceUID, ds.SeriesInstanceUID, ds.FrameOfReferenceUID = study, series_uid, frame
+        ds.PatientName = "FANTOMA^T1"
+        ds.PatientID = "000003"
+        ds.PatientBirthDate = "19580301"
+        ds.PatientSex = "F"
+        ds.StudyDate = study_date
+        ds.StudyTime = "120000"
+        ds.StudyDescription = "RM ENCEFALO VOLUMETRIA"
+        ds.SeriesDescription = "SAG T1 MPRAGE"
+        ds.SeriesNumber = 1
+        ds.AccessionNumber = "RMT1"
+        ds.Modality = "MR"
+        ds.InstanceNumber = k + 1
+        ds.ImagePositionPatient = [float(x[k]), float(y0), float(z0)]
+        ds.ImageOrientationPatient = [0, 1, 0, 0, 0, -1]             # linhas para posterior, colunas para inferior
+        ds.PixelSpacing = [spacing, spacing]
+        ds.SliceThickness = spacing
+        ds.SpacingBetweenSlices = spacing
+        ds.Rows, ds.Columns = int(data.shape[1]), int(data.shape[2])
+        ds.SamplesPerPixel = 1
+        ds.PhotometricInterpretation = "MONOCHROME2"
+        ds.BitsAllocated, ds.BitsStored, ds.HighBit = 16, 12, 11
+        ds.PixelRepresentation = 0
+        ds.PixelData = data[k].tobytes()
+        p = os.path.join(out, f"IM{k:04d}.dcm")
+        ds.save_as(p, enforce_file_format=True)
+        paths.append(p)
+    return paths
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if args and args[0] == "--rm":
+    if args and args[0] == "--t1":
+        out = args[1] if len(args) > 1 else "phantom-t1"
+        write_t1_study(out)
+        print(f"Fantoma de T1 volumétrico gravado em {out}/")
+    elif args and args[0] == "--rm":
         out = args[1] if len(args) > 1 else "phantom-rm"
         write_mr_pair(out)
         print(f"Fantomas de RM gravados em {out}/anterior e {out}/atual")

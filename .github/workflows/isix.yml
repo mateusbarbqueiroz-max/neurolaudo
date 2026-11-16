@@ -210,7 +210,18 @@ jobs:
           python -m pip install --quiet numpy pydicom
           python engine/scripts/make_phantom.py "$RUNNER_TEMP/fantoma"
           python engine/scripts/make_phantom.py --rm "$RUNNER_TEMP/rm"
+          python engine/scripts/make_phantom.py --t1 "$RUNNER_TEMP/t1"
           ls "$RUNNER_TEMP/fantoma" | wc -l
+
+      - name: Motor de volumetria de mentira (testa o caminho do complemento, não a segmentação)
+        run: |
+          # O motor de verdade (TensorFlow e modelos) é testado em volumetria.yml. Aqui o Python e o motor
+          # do NeuroLaudo são os de verdade; só os dois programas de segmentação são trocados por imitações.
+          MOTOR="$RUNNER_TEMP/motor"
+          python -m venv "$MOTOR/venv"
+          "$MOTOR/venv/bin/python" -m pip install --quiet ./engine
+          "$MOTOR/venv/bin/python" engine/tests/fakes/make_fake_engine.py "$MOTOR"
+          NEUROLAUDO_MOTOR="$MOTOR" "$MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli verificar
 
       - name: Abrir o IsiX
         run: |
@@ -223,7 +234,7 @@ jobs:
             -AUTOCLEANINGSPACE NO -AUTOCLEANINGDATE NO -AUTOROUTINGACTIVATED NO -STORESCP NO -USESTORESCP NO \
             -publishDICOMBonjour NO -searchDICOMBonjour NO \
             -checkForUpdatesPlugins NO -SUEnableAutomaticChecks NO -httpXMLRPCServer YES -httpXMLRPCServerAccessScope 0 \
-            -NeuroLaudoAutoteste YES \
+            -NeuroLaudoAutoteste YES -NeuroLaudoMotor "$RUNNER_TEMP/motor" \
             > "$SAIDA/isix-saida.txt" 2>&1 &
           sleep 30
           pgrep -fl "IsiX DICOM Viewer.app/Contents/MacOS/" | cut -c1-80 || echo "O IsiX não está rodando"
@@ -298,6 +309,36 @@ jobs:
           sleep 6
           janelas
           screencapture -x "$SAIDA/5-rm-comparacao.png" || echo "captura falhou"
+
+      - name: Volumetria dentro do IsiX (fantoma de T1 volumétrico)
+        run: |
+          source "$RUNNER_TEMP/ui.sh"
+          REGISTRO() { log show --last 6m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' 2>/dev/null | grep "volumetria" || true; }
+          menu_clicar "Window" "Close All Viewers"
+          sleep 3
+          open -a "$APP" "$RUNNER_TEMP/t1" || echo "open falhou"
+          sleep 15
+          clicar_isix "Copy Links"
+          sleep 30
+          janelas
+          /usr/bin/osascript -e 'tell application "IsiX DICOM Viewer" to activate' || true
+          sleep 2
+          plugin_clicar "Image Filters" "Volumetria cerebral (pesquisa)…"
+          # Espera o fim (linha "concluída" ou "não concluída" no registro), até 4 minutos.
+          for i in $(seq 1 48); do
+            if REGISTRO | grep -q "concluída"; then break; fi
+            sleep 5
+          done
+          sleep 4
+          REGISTRO
+          screencapture -x "$SAIDA/6-volumetria-resumo.png" || echo "captura falhou"
+          clicar_isix "Fechar"
+          sleep 3
+          menu_clicar "Window" "Tile 2D Viewer Windows"
+          sleep 6
+          janelas
+          screencapture -x "$SAIDA/7-volumetria-mapa.png" || echo "captura falhou"
+          REGISTRO | grep -q "volumetria: concluída" && echo "VOLUMETRIA NO ISIX: OK" || echo "VOLUMETRIA NO ISIX: NÃO CONCLUÍDA"
 
       - name: Registros
         if: always()

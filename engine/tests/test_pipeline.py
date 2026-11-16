@@ -18,42 +18,7 @@ from neurolaudo.volumetry.report import ReportHeader
 IXI_CSV = os.path.join(os.path.dirname(__file__), "data", "brainquant_ixi_volumes.csv")
 SUBJECT = "IXI072-HH-2324-T1"
 
-FAKE_STRIP = '''
-import argparse, nibabel as nib, numpy as np
-p = argparse.ArgumentParser()
-p.add_argument("-i"); p.add_argument("-m"); p.add_argument("-t")
-a = p.parse_args()
-image = nib.load(a.i)
-nib.save(nib.Nifti1Image((np.asarray(image.dataobj) > 50).astype(np.uint8), image.affine), a.m)
-'''
-
-FAKE_SEG = '''
-import argparse, os, shutil, sys, nibabel as nib, numpy as np
-p = argparse.ArgumentParser()
-for name in ("--i", "--o", "--vol", "--qc", "--threads"):
-    p.add_argument(name)
-for name in ("--fast", "--cpu", "--keepgeom", "--noaddctab"):
-    p.add_argument(name, action="store_true")
-a = p.parse_args()
-if os.environ.get("FAKE_FAIL"):
-    print("erro simulado do segmentador")
-    sys.exit(3)
-assert a.fast and a.cpu and a.keepgeom, "opções das normas ausentes"
-image = nib.load(a.i)
-data = np.asarray(image.dataobj)
-i, j, k = np.meshgrid(*[np.arange(n) for n in data.shape], indexing="ij")
-x = image.affine[0, 0] * i + image.affine[0, 1] * j + image.affine[0, 2] * k + image.affine[0, 3]
-labels = np.zeros(data.shape, np.int16)
-labels[data > 50] = 2
-labels[(data > 150) & (x < 0)] = 17      # x negativo em RAS = esquerda do paciente
-labels[(data > 150) & (x > 0)] = 53
-nib.save(nib.Nifti1Image(labels, image.affine), a.o)
-shutil.copy(os.environ["FAKE_VOLUMES"], a.vol)
-low = "0.41" if os.environ.get("FAKE_LOW_QC") else "0.83"
-with open(a.qc, "w") as fh:
-    fh.write("subject,general white matter,general grey matter,hippocampus+amygdala\\n")
-    fh.write("t1_recortado,0.91,0.88," + low + "\\n")
-'''
+FAKES = os.path.join(os.path.dirname(__file__), "fakes")
 
 
 def make_t1(path, shape=(72, 88, 64)):
@@ -81,9 +46,8 @@ def make_t1(path, shape=(72, 88, 64)):
 
 @pytest.fixture()
 def fake_tools(tmp_path, monkeypatch):
-    strip, seg, volumes = tmp_path / "fake_strip.py", tmp_path / "fake_seg.py", tmp_path / "volumes.csv"
-    strip.write_text(FAKE_STRIP, encoding="utf-8")
-    seg.write_text(FAKE_SEG, encoding="utf-8")
+    strip, seg = os.path.join(FAKES, "fake_synthstrip.py"), os.path.join(FAKES, "fake_synthseg.py")
+    volumes = tmp_path / "volumes.csv"
     with open(IXI_CSV, newline="", encoding="utf-8") as fh:
         row = next(r for r in csv.DictReader(fh) if r["subject"] == SUBJECT)
     columns = [c for c in row if c not in ("site", "sex", "age", "exclude")]
@@ -207,3 +171,37 @@ def test_screen_convention_puts_patient_right_on_the_left():
     sagittal = np.zeros((7, 9))
     sagittal[6, 8] = 1         # anterior e superior
     assert overlay._display(sagittal)[0, 0] == 1           # em cima, anterior à esquerda
+
+
+def test_fake_engine_folder_and_t1_phantom_work_together(tmp_path, monkeypatch):
+    """O mesmo arranjo do teste dentro do IsiX: motor de mentira em pasta + fantoma de T1 em DICOM."""
+    import subprocess
+
+    import pydicom
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+    import make_phantom
+
+    for name in ("NEUROLAUDO_SYNTHSTRIP", "NEUROLAUDO_SYNTHSEG", "NEUROLAUDO_FS_HOME", "FAKE_VOLUMES"):
+        monkeypatch.delenv(name, raising=False)
+    home = tmp_path / "motor"
+    subprocess.run([sys.executable, os.path.join(FAKES, "make_fake_engine.py"), str(home)], check=True, capture_output=True)
+    monkeypatch.setenv("NEUROLAUDO_MOTOR", str(home))
+
+    # O fantoma em DICOM: série sagital, esfera maior à esquerda do paciente (x positivo em LPS).
+    files = make_phantom.write_t1_study(str(tmp_path / "t1"))
+    first = pydicom.dcmread(files[0])
+    assert len(files) == 96 and first.SeriesDescription == "SAG T1 MPRAGE"
+    assert [float(v) for v in first.ImageOrientationPatient] == [0, 1, 0, 0, 0, -1]
+    data, x, y0, z0 = make_phantom.t1_volume()
+    assert (data[x > 0] == 200).sum() > 3 * (data[x < 0] == 200).sum()
+
+    # O mesmo volume como o complemento o gravaria: [coluna, linha, corte], cortes da esquerda para a direita.
+    order = np.argsort(-x)
+    volume_data = np.transpose(data[order], (2, 1, 0)).astype(np.float32)
+    affine = np.array([[0, 0, 1.25, -x[order[0]]], [-1.25, 0, 0, -y0], [0, -1.25, 0, z0], [0, 0, 0, 1]])
+    t1 = tmp_path / "t1.nii"
+    nib.save(nib.Nifti1Image(volume_data, affine), str(t1))
+    result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=68.7, sex="F")
+    assert result["entrada"]["orientacao"] == "PIR"
+    assert result["mapa"] == {"arquivo": "mapa.rgba", "cortes": 96, "linhas": 112, "colunas": 128}
