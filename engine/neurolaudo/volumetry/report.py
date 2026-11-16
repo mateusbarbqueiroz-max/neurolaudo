@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
-from matplotlib.ticker import MaxNLocator  # noqa: E402
+from matplotlib.ticker import MaxNLocator, ScalarFormatter  # noqa: E402
 
 from neurolaudo.volumetry.norms import Assessment, StructureResult, asymmetry_percent  # noqa: E402
 
@@ -86,6 +86,16 @@ def flag_text(result: StructureResult) -> str:
     return ""
 
 
+class _CommaFormatter(ScalarFormatter):
+    """Números dos eixos com vírgula decimal, como no restante da página."""
+
+    def __init__(self):
+        super().__init__(useOffset=False)
+
+    def __call__(self, x, pos=None):
+        return super().__call__(x, pos).replace(".", ",")
+
+
 def _volume_text(mm3: float) -> str:
     ml = mm3 / 1000.0
     return br(ml, 0) if ml >= 100 else br(ml, 1)
@@ -150,6 +160,7 @@ def _draw_chart(ax, result: StructureResult, assessment: Assessment) -> None:
     ax.set_xticks([20, 40, 60, 80])
     ax.tick_params(axis="both", labelsize=6.5, colors=INK_MUTED, length=2, width=0.5)
     ax.yaxis.set_major_locator(MaxNLocator(nbins=3))
+    ax.yaxis.set_major_formatter(_CommaFormatter())
     ax.grid(axis="y", color=GRID, linewidth=0.5)
     ax.set_axisbelow(True)
     for side in ("top", "right"):
@@ -181,15 +192,13 @@ def build_figure(assessment: Assessment, header: ReportHeader):
     table_ax = fig.add_axes([left, 0.615, right - left, 0.265])
     _draw_table(table_ax, assessment)
 
-    note = "Percentil para a idade e o sexo, com o volume ajustado ao volume intracraniano."
     try:
         asym = asymmetry_percent(assessment.result("hippocampus_left").volume_mm3,
                                  assessment.result("hippocampus_right").volume_mm3)
         side = "esquerdo maior" if asym > 0 else "direito maior"
-        note += f"  Assimetria dos hipocampos: {br(abs(asym), 1)} % ({side})."
+        fig.text(left, 0.598, f"Assimetria dos hipocampos: {br(abs(asym), 1)} % ({side}).", fontsize=8.5, color=INK, va="top")
     except (KeyError, ValueError):
         pass
-    fig.text(left, 0.598, note, fontsize=8, color=INK_SECONDARY, va="top")
 
     handles = [Patch(facecolor=BAND_WIDE, label="percentis 5 a 95"), Patch(facecolor=BAND_NARROW, label="percentis 25 a 75"),
                Line2D([0], [0], color=MEDIAN, linewidth=1.4, label="mediana"),
@@ -208,7 +217,8 @@ def build_figure(assessment: Assessment, header: ReportHeader):
         if index % 5 == 0:
             ax.set_ylabel("volume ajustado (mL)", fontsize=6.5, color=INK_MUTED, labelpad=2)
 
-    lines = [f"Referência: {assessment.norms.description}; "
+    lines = ["Percentil para a idade e o sexo, com o volume ajustado ao volume intracraniano (VIC).",
+             f"Referência: {assessment.norms.description}; "
              f"{br(assessment.norms.age_min, 0)} a {br(assessment.norms.age_max, 0)} anos.",
              "As curvas mostram o volume ajustado a um volume intracraniano de "
              f"{br(assessment.norms.reference_icv_mm3 / 1000.0, 0)} mL.",
