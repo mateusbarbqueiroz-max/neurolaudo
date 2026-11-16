@@ -21,8 +21,8 @@ from neurolaudo.volumetry.pipeline import run_exam
 from neurolaudo.volumetry.report import ReportHeader
 from neurolaudo.volumetry.tables import read_volumes_csv
 
-MEAN_LIMIT = 1.0      # % de desvio médio aceito por estrutura
-SINGLE_LIMIT = 4.0    # % de diferença aceita em um sujeito
+MEAN_LIMIT = 0.2      # % de desvio médio aceito por estrutura (a rodada de 16/11/2026 deu 0,00)
+SINGLE_LIMIT = 1.0    # % de diferença aceita em um sujeito
 
 
 def main(argv: list[str]) -> int:
@@ -79,7 +79,7 @@ def main(argv: list[str]) -> int:
         failed = failed or abs(mean) > MEAN_LIMIT or worst > SINGLE_LIMIT
         report.append(f"{name:30s} {mean:+8.2f} {spread:8.2f} {worst:8.2f}")
     report += ["", f"Tempo médio por exame: {statistics.fmean(seconds):.0f} s.",
-               f"Limites: média até {MEAN_LIMIT:.0f}% e cada sujeito até {SINGLE_LIMIT:.0f}%. "
+               f"Limites: média até {MEAN_LIMIT:.1f}% e cada sujeito até {SINGLE_LIMIT:.1f}%. "
                + ("ALGUM LIMITE FOI PASSADO." if failed else "Dentro dos limites.")]
     text = "\n".join(report)
     print("\n" + text)
