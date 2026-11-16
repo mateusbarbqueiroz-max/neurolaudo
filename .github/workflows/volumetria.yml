@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       onde:
-        description: "Onde rodar: linux, mac ou ambos"
+        description: "linux (8 voluntários), miniatura (recorte em Linux e Mac), ambos ou diagnostico"
         default: "linux"
 
 permissions:
@@ -26,7 +26,7 @@ env:
 
 jobs:
   linux:
-    if: inputs.onde != 'mac'
+    if: inputs.onde == 'linux' || inputs.onde == 'ambos'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -76,14 +76,24 @@ jobs:
           fi
           if [ -n "$(ls -A .)" ]; then gh release upload teste-volumetria ./* --clobber; fi
 
-  mac:
-    if: inputs.onde != 'linux'
-    runs-on: xcode-27
-    timeout-minutes: 90
+  miniatura:
+    # A mesma imagem pequena (um recorte do exame público) segmentada de verdade em Linux e em Mac com
+    # Apple Silicon. O servidor Mac do GitHub tem 7 GB de memória e o exame inteiro não cabe nele;
+    # o recorte cabe e mostra se as duas máquinas dão os mesmos números.
+    if: inputs.onde == 'miniatura' || inputs.onde == 'mac' || inputs.onde == 'ambos'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { maquina: ubuntu-latest, nome: linux }
+          - { maquina: xcode-27, nome: mac }
+    runs-on: ${{ matrix.maquina }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
       - name: Compilar a biblioteca surfa para Apple Silicon e publicar
+        if: matrix.nome == 'mac'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -105,36 +115,43 @@ jobs:
           fi
           gh release upload motor rodas/* --clobber
 
-      - name: Instalar o motor de volumetria (sem compilador)
+      - name: Instalar o motor de volumetria (no Mac, sem compilador)
         run: |
           export NEUROLAUDO_MOTOR="$RUNNER_TEMP/motor"
           echo "NEUROLAUDO_MOTOR=$NEUROLAUDO_MOTOR" >> "$GITHUB_ENV"
           # Compilador proibido: o instalador tem de funcionar como no Mac do usuário, sem Xcode.
-          time CC=/usr/bin/false CXX=/usr/bin/false NEUROLAUDO_FONTE="$GITHUB_WORKSPACE/engine" bash mac/instalar-volumetria.sh
+          if [ "${{ matrix.nome }}" = "mac" ]; then export CC=/usr/bin/false CXX=/usr/bin/false; fi
+          time NEUROLAUDO_FONTE="$GITHUB_WORKSPACE/engine" bash mac/instalar-volumetria.sh
           du -sh "$NEUROLAUDO_MOTOR"
 
-      - name: Baixar o T1 público
+      - name: Baixar o T1 público e recortar
         run: |
           mkdir -p "$RUNNER_TEMP/ixi" && cd "$RUNNER_TEMP/ixi"
+          if [ "${{ matrix.nome }}" = "mac" ]; then PRIMEIRO="-q"; else PRIMEIRO="--occurrence=1"; fi
           curl -sL --max-time 900 http://biomedic.doc.ic.ac.uk/brain-development/downloads/IXI/IXI-T1.tar \
-            | tar -xf - -q "$SUJEITO.nii.gz" || true
-          ls -la
+            | tar -xf - $PRIMEIRO "$SUJEITO.nii.gz" || true
           test -s "$SUJEITO.nii.gz"
+          "$NEUROLAUDO_MOTOR/venv/bin/python" "$GITHUB_WORKSPACE/engine/scripts/make_crop.py" "$SUJEITO.nii.gz" recorte.nii.gz
 
-      - name: Rodar a volumetria
+      - name: Rodar a volumetria no recorte
         run: |
-          /usr/bin/time -l "$NEUROLAUDO_MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli exame \
-            --nifti "$RUNNER_TEMP/ixi/$SUJEITO.nii.gz" --saida "$RUNNER_TEMP/saida" \
-            --idade "$IDADE" --sexo "$SEXO" --nome "Voluntário público IXI002" --serie "T1 (banco público IXI)" \
+          if [ "${{ matrix.nome }}" = "mac" ]; then MEDIR="/usr/bin/time -l"; else MEDIR="/usr/bin/time -v"; fi
+          $MEDIR "$NEUROLAUDO_MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli exame \
+            --nifti "$RUNNER_TEMP/ixi/recorte.nii.gz" --saida "$RUNNER_TEMP/saida" \
+            --idade "$IDADE" --sexo "$SEXO" --nome "Recorte do voluntário público IXI002" --serie "T1 (banco público IXI), recorte" \
             2> "$RUNNER_TEMP/tempo.txt" || { cat "$RUNNER_TEMP/tempo.txt"; tail -40 "$RUNNER_TEMP"/saida/trabalho/registro-*.txt; exit 1; }
-          grep -E "real|maximum resident" "$RUNNER_TEMP/tempo.txt"
-          cat "$RUNNER_TEMP/saida/resultado.json"
+          grep -E "Elapsed|Maximum resident|real|maximum resident" "$RUNNER_TEMP/tempo.txt"
+          cat "$RUNNER_TEMP/saida/trabalho/volumes.csv"
 
-      - name: Comparar com os volumes publicados
+      - name: Comparar com o mesmo recorte medido em Linux
         run: |
-          "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/compare_reference.py \
-            "$RUNNER_TEMP/saida/trabalho/volumes.csv" engine/tests/data/brainquant_ixi_volumes.csv "$SUJEITO" 2.0 \
-            | tee "$RUNNER_TEMP/saida/comparacao.txt"
+          REFERENCIA=engine/tests/data/ixi002_recorte_volumes.csv
+          if [ -f "$REFERENCIA" ]; then
+            "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/compare_reference.py \
+              "$RUNNER_TEMP/saida/trabalho/volumes.csv" "$REFERENCIA" t1_recortado 0.5 | tee "$RUNNER_TEMP/saida/comparacao.txt"
+          else
+            echo "Ainda não há referência do recorte no repositório; esta rodada só a produz."
+          fi
 
       - name: Publicar o resultado
         if: always()
@@ -143,17 +160,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p "$RUNNER_TEMP/publicar" && cd "$RUNNER_TEMP/publicar"
-          for f in relatorio.png conferencia.png relatorio.pdf resultado.json comparacao.txt; do
-            [ -f "$RUNNER_TEMP/saida/$f" ] && cp "$RUNNER_TEMP/saida/$f" "mac-$f"
+          for f in conferencia.png resultado.json comparacao.txt; do
+            if [ -f "$RUNNER_TEMP/saida/$f" ]; then cp "$RUNNER_TEMP/saida/$f" "${{ matrix.nome }}-recorte-$f"; fi
           done
-          for f in "$RUNNER_TEMP"/saida/trabalho/registro-*.txt "$RUNNER_TEMP/tempo.txt"; do
-            [ -f "$f" ] && cp "$f" "mac-$(basename "$f")"
+          for f in "$RUNNER_TEMP/saida/trabalho/volumes.csv" "$RUNNER_TEMP/tempo.txt" "$RUNNER_TEMP"/saida/trabalho/registro-*.txt; do
+            if [ -f "$f" ]; then cp "$f" "${{ matrix.nome }}-recorte-$(basename "$f")"; fi
           done
           ls -la
-          if ! gh release view teste-volumetria >/dev/null 2>&1; then
-            gh release create teste-volumetria --title "Teste da volumetria (automático)" --prerelease --latest=false \
-              --notes "Resultado do último teste automático da volumetria em um exame público (voluntário IXI002 do banco IXI, CC BY-SA 3.0, https://brain-development.org/ixi-dataset/). Nenhum dado de paciente. Uso em pesquisa, não validado para diagnóstico."
-          fi
           if [ -n "$(ls -A .)" ]; then gh release upload teste-volumetria ./* --clobber; fi
 
   diagnostico:

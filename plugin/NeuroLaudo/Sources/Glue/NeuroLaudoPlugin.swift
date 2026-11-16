@@ -115,8 +115,17 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         try registerStudyCommands(context)
         try context.register(IsiXCommand(id: Command.volumetry, title: "Volumetria cerebral (pesquisa)…",
                                          placement: .imageFilters, requirement: .viewer)) { [weak self] invocation in
-            guard let self, let context = self.context, let viewer = invocation.viewer else { return }
-            try self.startVolumetry(in: viewer, context: context)
+            guard let self, let context = self.context else { return }
+            guard let viewer = invocation.viewer else {
+                PluginLog.note("volumetria: comando chamado sem série aberta")
+                return
+            }
+            do {
+                try self.startVolumetry(in: viewer, context: context)
+            } catch {
+                PluginLog.note("volumetria: recusada. \(Self.describe(error))")
+                throw error
+            }
         }
 
         try context.register(IsiXCommand(id: Command.about, title: "NeuroLaudo: ajuda", placement: .other,

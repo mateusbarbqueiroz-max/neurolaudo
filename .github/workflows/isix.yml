@@ -320,6 +320,10 @@ jobs:
           sleep 15
           clicar_isix "Copy Links"
           sleep 30
+          # No servidor as janelas só passam a existir na tela depois deste comando; sem janela de
+          # imagem ativa o comando do complemento não tem em que série trabalhar.
+          menu_clicar "Window" "Tile 2D Viewer Windows"
+          sleep 6
           janelas
           /usr/bin/osascript -e 'tell application "IsiX DICOM Viewer" to activate' || true
           sleep 2
