@@ -129,10 +129,10 @@ fi
 rm -rf "$UV_CACHE_DIR"
 
 echo "Conferindo a instalação"
-NEUROLAUDO_MOTOR="$MOTOR" TF_CPP_MIN_LOG_LEVEL=3 "$PY" - <<'CONFERE'
-import tensorflow, torch, surfa, nibabel, numpy
-print(f"  TensorFlow {tensorflow.__version__}, PyTorch {torch.__version__}, surfa {surfa.__version__}, numpy {numpy.__version__}")
-CONFERE
+# Um processo para cada biblioteca: TensorFlow e PyTorch juntos no mesmo processo se atrapalham,
+# e o motor também os usa em processos separados.
+TF_CPP_MIN_LOG_LEVEL=3 "$PY" -c "import tensorflow, numpy; print('  TensorFlow', tensorflow.__version__, '· numpy', numpy.__version__)"
+"$PY" -c "import torch, surfa, nibabel; print('  PyTorch', torch.__version__, '· surfa', surfa.__version__, '· nibabel', nibabel.__version__)"
 NEUROLAUDO_MOTOR="$MOTOR" "$PY" -m neurolaudo.volumetry.cli verificar
 
 echo

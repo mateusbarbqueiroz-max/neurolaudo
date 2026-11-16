@@ -64,6 +64,7 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p "$RUNNER_TEMP/publicar" && cd "$RUNNER_TEMP/publicar"
           for f in relatorio.png conferencia.png relatorio.pdf resultado.json comparacao.txt; do
@@ -71,6 +72,86 @@ jobs:
           done
           for f in "$RUNNER_TEMP"/saida/trabalho/registro-*.txt "$RUNNER_TEMP/tempo.txt"; do
             [ -f "$f" ] && cp "$f" "linux-$(basename "$f")"
+          done
+          ls -la
+          if ! gh release view teste-volumetria >/dev/null 2>&1; then
+            gh release create teste-volumetria --title "Teste da volumetria (automático)" --prerelease --latest=false \
+              --notes "Resultado do último teste automático da volumetria em um exame público (voluntário IXI002 do banco IXI, CC BY-SA 3.0, https://brain-development.org/ixi-dataset/). Nenhum dado de paciente. Uso em pesquisa, não validado para diagnóstico."
+          fi
+          if [ -n "$(ls -A .)" ]; then gh release upload teste-volumetria ./* --clobber; fi
+
+  mac:
+    if: inputs.onde != 'linux'
+    runs-on: xcode-27
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilar a biblioteca surfa para Apple Silicon e publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # A surfa (licença MIT, do FreeSurfer) só existe em código-fonte. O Mac do usuário não tem
+          # compilador, então o projeto publica a versão já compilada, que o instalador baixa.
+          sw_vers; uname -m; sysctl -n hw.memsize hw.ncpu
+          mkdir -p "$RUNNER_TEMP/roda" && cd "$RUNNER_TEMP/roda"
+          curl -fL -sS https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-apple-darwin.tar.gz | tar -xz
+          UV="$PWD/uv-aarch64-apple-darwin/uv"
+          "$UV" venv --quiet --seed --python-preference only-managed --python 3.11 venv
+          venv/bin/python -m pip wheel --quiet --no-deps "surfa==0.6.3" -w rodas
+          RODA="$(basename rodas/surfa-*.whl)"
+          echo "$RODA" > rodas/surfa-macos-arm64.txt
+          ls -la rodas
+          if ! gh release view motor >/dev/null 2>&1; then
+            gh release create motor --title "Peças do motor de volumetria" --prerelease --latest=false \
+              --notes "Biblioteca surfa 0.6.3 (licença MIT, https://github.com/freesurfer/surfa) compilada para Mac com Apple Silicon e Python 3.11. O instalador da volumetria (mac/instalar-volumetria.sh) baixa daqui, porque a surfa só é distribuída em código-fonte e o Mac sem Xcode não a compila."
+          fi
+          gh release upload motor rodas/* --clobber
+
+      - name: Instalar o motor de volumetria (sem compilador)
+        run: |
+          export NEUROLAUDO_MOTOR="$RUNNER_TEMP/motor"
+          echo "NEUROLAUDO_MOTOR=$NEUROLAUDO_MOTOR" >> "$GITHUB_ENV"
+          # Compilador proibido: o instalador tem de funcionar como no Mac do usuário, sem Xcode.
+          time CC=/usr/bin/false CXX=/usr/bin/false NEUROLAUDO_FONTE="$GITHUB_WORKSPACE/engine" bash mac/instalar-volumetria.sh
+          du -sh "$NEUROLAUDO_MOTOR"
+
+      - name: Baixar o T1 público
+        run: |
+          mkdir -p "$RUNNER_TEMP/ixi" && cd "$RUNNER_TEMP/ixi"
+          curl -sL --max-time 900 http://biomedic.doc.ic.ac.uk/brain-development/downloads/IXI/IXI-T1.tar \
+            | tar -xf - -q "$SUJEITO.nii.gz" || true
+          ls -la
+          test -s "$SUJEITO.nii.gz"
+
+      - name: Rodar a volumetria
+        run: |
+          /usr/bin/time -l "$NEUROLAUDO_MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli exame \
+            --nifti "$RUNNER_TEMP/ixi/$SUJEITO.nii.gz" --saida "$RUNNER_TEMP/saida" \
+            --idade "$IDADE" --sexo "$SEXO" --nome "Voluntário público IXI002" --serie "T1 (banco público IXI)" \
+            2> "$RUNNER_TEMP/tempo.txt" || { cat "$RUNNER_TEMP/tempo.txt"; tail -40 "$RUNNER_TEMP"/saida/trabalho/registro-*.txt; exit 1; }
+          grep -E "real|maximum resident" "$RUNNER_TEMP/tempo.txt"
+          cat "$RUNNER_TEMP/saida/resultado.json"
+
+      - name: Comparar com os volumes publicados
+        run: |
+          "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/compare_reference.py \
+            "$RUNNER_TEMP/saida/trabalho/volumes.csv" engine/tests/data/brainquant_ixi_volumes.csv "$SUJEITO" 2.0 \
+            | tee "$RUNNER_TEMP/saida/comparacao.txt"
+
+      - name: Publicar o resultado
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/publicar" && cd "$RUNNER_TEMP/publicar"
+          for f in relatorio.png conferencia.png relatorio.pdf resultado.json comparacao.txt; do
+            [ -f "$RUNNER_TEMP/saida/$f" ] && cp "$RUNNER_TEMP/saida/$f" "mac-$f"
+          done
+          for f in "$RUNNER_TEMP"/saida/trabalho/registro-*.txt "$RUNNER_TEMP/tempo.txt"; do
+            [ -f "$f" ] && cp "$f" "mac-$(basename "$f")"
           done
           ls -la
           if ! gh release view teste-volumetria >/dev/null 2>&1; then
