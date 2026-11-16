@@ -155,3 +155,39 @@ jobs:
               --notes "Resultado do último teste automático da volumetria em um exame público (voluntário IXI002 do banco IXI, CC BY-SA 3.0, https://brain-development.org/ixi-dataset/). Nenhum dado de paciente. Uso em pesquisa, não validado para diagnóstico."
           fi
           if [ -n "$(ls -A .)" ]; then gh release upload teste-volumetria ./* --clobber; fi
+
+  diagnostico:
+    # Mede tempo, memória e números do SynthSeg em várias configurações (um exame público).
+    if: inputs.onde == 'diagnostico'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar o motor de volumetria
+        run: |
+          export NEUROLAUDO_MOTOR="$RUNNER_TEMP/motor"
+          echo "NEUROLAUDO_MOTOR=$NEUROLAUDO_MOTOR" >> "$GITHUB_ENV"
+          NEUROLAUDO_FONTE="$GITHUB_WORKSPACE/engine" bash mac/instalar-volumetria.sh
+      - name: Baixar o T1 público
+        run: |
+          mkdir -p "$RUNNER_TEMP/ixi" && cd "$RUNNER_TEMP/ixi"
+          curl -sL --max-time 900 http://biomedic.doc.ic.ac.uk/brain-development/downloads/IXI/IXI-T1.tar \
+            | tar -xf - --occurrence=1 "$SUJEITO.nii.gz" || true
+          test -s "$SUJEITO.nii.gz"
+      - name: Medir
+        run: |
+          lscpu | grep -E "Model name|^CPU\(s\)|Flags" | cut -c1-400
+          free -g | head -2
+          "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/diagnose_segmenter.py "$RUNNER_TEMP/ixi/$SUJEITO.nii.gz" \
+            engine/tests/data/brainquant_ixi_volumes.csv "$SUJEITO" "$RUNNER_TEMP/diag" | tee "$RUNNER_TEMP/diagnostico.txt"
+      - name: Publicar
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ -f "$RUNNER_TEMP/diagnostico.txt" ]; then
+            cp "$RUNNER_TEMP/diagnostico.txt" linux-diagnostico.txt
+            lscpu | grep -E "Model name" >> linux-diagnostico.txt
+            gh release upload teste-volumetria linux-diagnostico.txt --clobber
+          fi
