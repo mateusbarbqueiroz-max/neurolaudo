@@ -196,6 +196,34 @@ Conferido em 16/11/2026, no mesmo servidor:
 - **Comparação com exame anterior.** Com um exame anterior do mesmo paciente no
   banco, o comando abriu a série equivalente (de oito para nove janelas).
 
-Ainda não exercitado dentro do IsiX: o painel do ASPECTS e os avisos com botão
-Copiar (telas), as medidas com linhas desenhadas à mão e exames reais, cujos
-nomes de série podem diferir dos do exame de teste.
+Ainda não exercitado dentro do IsiX (em 16/11/2026 de manhã): o painel do
+ASPECTS, as medidas com linhas desenhadas à mão e exames reais, cujos nomes de
+série podem diferir dos do exame de teste. O aviso com botão Copiar foi visto
+à tarde, no teste da volumetria (abaixo).
+
+Conferido em 16/11/2026 (tarde), no mesmo servidor, com o exame de teste de T1
+volumétrico (`make_phantom.py --t1`):
+
+- **Volumetria, caminho do complemento.** O comando *Volumetria cerebral
+  (pesquisa)…* copiou os 96 cortes da série aberta para um arquivo de volume,
+  chamou o motor em Python como processo à parte, e o motor leu do arquivo a
+  mesma orientação que o complemento tinha calculado ("PIR"). Registro:
+  "volumetria: série copiada, 96 cortes, orientação PIR" e, seis segundos
+  depois, "volumetria: concluída".
+- **Séries gravadas pelo kit.** `writeDerivedSeries` seguido de `importFiles`
+  pôs no exame duas séries novas: "NeuroLaudo: volumetria (pesquisa)", com 2
+  imagens, e "NeuroLaudo: mapa da segmentação (pesquisa)", com 96 imagens na
+  mesma posição dos cortes do T1 (o visualizador mostra as mesmas coordenadas
+  nas duas janelas). O IsiX copia paciente e exame da série de origem.
+- **Aviso com o resumo.** A tela com a frase para o laudo e os botões Fechar e
+  Copiar apareceu como esperado (captura `6-volumetria-resumo.png`).
+- Neste teste só a segmentação era de mentira (rótulos por limiar); o restante
+  do motor era o de verdade. A segmentação de verdade é testada à parte
+  (`docs/VOLUMETRIA.md`).
+
+Fatos do kit usados na volumetria (lidos da interface e do `SDK/README.md`):
+`viewer.image(slice:)` devolve os pixels em ponto flutuante, linha por linha, e
+a geometria de cada corte; o centro do pixel (coluna c, linha r) fica em
+`imagePosition + rowDirection·(c·columnSpacing) + columnDirection·(r·rowSpacing)`;
+`startTask` roda o trabalho fora da linha principal; gravar e importar séries
+exige a capacidade `database.import` no `Info.plist`.
