@@ -23,8 +23,10 @@ final class SelfTestTests: XCTestCase {
             let normal = try Harness()
             XCTAssertFalse(normal.context.stubCommands.contains { $0.command.id == NeuroLaudoPlugin.Command.selfTest })
             let ci = try Harness(selfTest: true)
-            XCTAssertEqual(ci.context.stubCommands.count, 16)
-            ci.addViewer()
+            XCTAssertEqual(ci.context.stubCommands.count, 17)
+            let viewer = ci.addViewer()
+            try ci.context.stubRun(NeuroLaudoPlugin.Command.selfTestMiddle)
+            XCTAssertEqual(try viewer.series().currentSlice, 20)
             try ci.context.stubRun(NeuroLaudoPlugin.Command.selfTest)
         }
     }

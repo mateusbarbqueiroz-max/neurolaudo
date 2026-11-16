@@ -327,6 +327,9 @@ jobs:
           janelas
           /usr/bin/osascript -e 'tell application "IsiX DICOM Viewer" to activate' || true
           sleep 2
+          # Leva o T1 ao corte do meio: o mapa abre no mesmo corte, e a captura mostra as cores.
+          plugin_clicar "Others" "NeuroLaudo: corte do meio"
+          sleep 2
           plugin_clicar "Image Filters" "Volumetria cerebral (pesquisa)…"
           # Espera o fim (linha "concluída" ou "não concluída" no registro), até 4 minutos.
           for i in $(seq 1 48); do

@@ -62,6 +62,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         static let volumetry = "volumetria"
         static let about = "sobre"
         static let selfTest = "autoteste"
+        static let selfTestMiddle = "autoteste-meio"
     }
 
     static let aboutText = """
@@ -142,8 +143,18 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
                 SelfTest.runAndLog(in: viewer)
             }
         }
+        if selfTest {
+            // Leva a série ao corte do meio, para as capturas do teste automático mostrarem imagem.
+            try context.register(IsiXCommand(id: Command.selfTestMiddle, title: "NeuroLaudo: corte do meio", placement: .other,
+                                             requirement: .viewer)) { invocation in
+                guard let viewer = invocation.viewer else { return }
+                let count = try viewer.series().sliceCount
+                try viewer.setCurrentSlice(count / 2)
+                PluginLog.note("autoteste: corte \(count / 2 + 1) de \(count)")
+            }
+        }
         // Prova de que o IsiX carregou e ativou o complemento; ver PluginLog.
-        let count = NeuroWindowPresets.ct.count + 9 + (selfTest ? 1 : 0)
+        let count = NeuroWindowPresets.ct.count + 9 + (selfTest ? 2 : 0)
         PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(count) comandos")
     }
 
@@ -275,11 +286,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
     private func finishVolumetry(_ outcome: MeasureOutcome, stored: VolumetryStored?, context: IsiXPluginContext) {
         if let stored {
             PluginLog.note("volumetria: concluída, relatório \(stored.reportSeriesUID ?? "-"), mapa \(stored.mapSeriesUID ?? "-")")
-            // Abre o mapa colorido no corte do meio, para conferir a segmentação ao lado do T1.
-            if let map = stored.mapSeriesUID, let opened = try? context.database().openViewer(forSeries: map),
-               let count = try? opened.series().sliceCount, count > 1 {
-                try? opened.setCurrentSlice(count / 2)
-            }
+            // Abre o mapa colorido ao lado do T1. O IsiX já o posiciona no mesmo corte em que o T1 está.
+            if let map = stored.mapSeriesUID { _ = try? context.database().openViewer(forSeries: map) }
         } else {
             PluginLog.note("volumetria: não concluída. \(outcome.text.prefix(300))")
         }
