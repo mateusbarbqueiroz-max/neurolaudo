@@ -1,16 +1,12 @@
 # Pedido ao autor do IsiX DICOM Viewer
 
-Situação em 16/11/2026: **ainda não enviado.** A sessão do Claude não consegue
-abrir pedidos no repositório do autor (só age em repositórios onde o usuário
-pode gravar). O envio fica com o usuário.
+Situação: **enviado pelo usuário em 16/11/2026**, como
+[ThalesMMS/IsiX-DICOM-Viewer-macOS#48](https://github.com/ThalesMMS/IsiX-DICOM-Viewer-macOS/issues/48).
+Conferido no mesmo dia: aberto, com o texto abaixo, ainda sem resposta.
 
-## Como enviar
-
-1. Abra <https://github.com/ThalesMMS/IsiX-DICOM-Viewer-macOS/issues/new>,
-   já conectado à sua conta do GitHub.
-2. Cole o título e o texto abaixo. Estão em inglês, que é a língua do repositório.
-3. Clique em **Create** (ou **Submit new issue**).
-4. Me passe o endereço do pedido criado, para eu acompanhar a resposta.
+A sessão do Claude não consegue abrir nem comentar pedidos no repositório do
+autor (só age em repositórios onde o usuário pode gravar). O GitHub avisa o
+usuário por e-mail quando houver resposta; o Claude consegue ler o pedido.
 
 Não há dado de paciente nem nome de servidor no texto.
 
