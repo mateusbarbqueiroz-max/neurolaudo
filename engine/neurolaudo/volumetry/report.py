@@ -173,8 +173,8 @@ def _draw_chart(ax, result: StructureResult, assessment: Assessment) -> None:
     ax.set_xlim(low - 1, high + 1)
 
 
-def build_figure(assessment: Assessment, header: ReportHeader):
-    """Monta a página do relatório (A4 em pé)."""
+def build_figure(assessment: Assessment, header: ReportHeader, notes=()):
+    """Monta a página do relatório (A4 em pé). `notes`: avisos do exame, mostrados no rodapé."""
     fig = plt.figure(figsize=(8.27, 11.69), facecolor=SURFACE)
     left, right = 0.08, 0.92
 
@@ -224,7 +224,7 @@ def build_figure(assessment: Assessment, header: ReportHeader):
              f"{br(assessment.norms.reference_icv_mm3 / 1000.0, 0)} mL.",
              "Limites: entre aparelhos o resultado pode deslocar até cerca de 0,5 desvio-padrão; "
              "medida de um único momento, não mede perda ao longo do tempo."]
-    lines += list(assessment.warnings)
+    lines += list(assessment.warnings) + list(notes)
     y = 0.165
     for line in lines:
         for piece in textwrap.wrap(line, 125):
@@ -236,16 +236,39 @@ def build_figure(assessment: Assessment, header: ReportHeader):
     return fig
 
 
-def save_pdf(path: str, assessment: Assessment, header: ReportHeader) -> None:
-    fig = build_figure(assessment, header)
+def patient_line(assessment: Assessment, header: ReportHeader) -> str:
+    """Linha de identificação, para as outras páginas do relatório."""
+    age = "" if assessment.age is None else f"{br(assessment.age, 0)} anos"
+    return " · ".join(x for x in [header.patient_name, f"ID {header.patient_id}" if header.patient_id else "", age,
+                                  f"exame de {_date_text(header.exam_date)}" if header.exam_date else ""] if x)
+
+
+def save_figures_pdf(path: str, figures) -> None:
+    """Grava as páginas em um único PDF."""
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    with PdfPages(path) as pdf:
+        for fig in figures:
+            pdf.savefig(fig, facecolor=fig.get_facecolor())
+
+
+def figure_rgba(fig, dpi: int = 150) -> np.ndarray:
+    """A página como matriz RGBA (linhas, colunas, 4), para gravar como imagem DICOM."""
+    fig.set_dpi(dpi)
+    fig.canvas.draw()
+    return np.ascontiguousarray(np.asarray(fig.canvas.buffer_rgba()))
+
+
+def save_pdf(path: str, assessment: Assessment, header: ReportHeader, notes=()) -> None:
+    fig = build_figure(assessment, header, notes)
     try:
-        fig.savefig(path, format="pdf", facecolor=fig.get_facecolor())
+        save_figures_pdf(path, [fig])
     finally:
         plt.close(fig)
 
 
-def save_png(path: str, assessment: Assessment, header: ReportHeader, dpi: int = 150) -> None:
-    fig = build_figure(assessment, header)
+def save_png(path: str, assessment: Assessment, header: ReportHeader, dpi: int = 150, notes=()) -> None:
+    fig = build_figure(assessment, header, notes)
     try:
         fig.savefig(path, format="png", dpi=dpi, facecolor=fig.get_facecolor())
     finally:
@@ -253,12 +276,9 @@ def save_png(path: str, assessment: Assessment, header: ReportHeader, dpi: int =
 
 
 def render_rgb(assessment: Assessment, header: ReportHeader, dpi: int = 120) -> np.ndarray:
-    """A página como matriz RGB (linhas, colunas, 3), para gravar como imagem DICOM."""
+    """A página como matriz RGB (linhas, colunas, 3)."""
     fig = build_figure(assessment, header)
     try:
-        fig.set_dpi(dpi)
-        fig.canvas.draw()
-        rgba = np.asarray(fig.canvas.buffer_rgba())
-        return np.ascontiguousarray(rgba[:, :, :3])
+        return np.ascontiguousarray(figure_rgba(fig, dpi)[:, :, :3])
     finally:
         plt.close(fig)

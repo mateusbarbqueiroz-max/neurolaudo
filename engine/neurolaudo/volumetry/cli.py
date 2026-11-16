@@ -1,75 +1,21 @@
 """Linha de comando da volumetria.
 
-Por enquanto parte de uma tabela de volumes já medida (o CSV que o
-`mri_synthseg --vol` grava) e produz o relatório:
+    exame      volumetria completa de um volume T1 em NIfTI (segmenta, compara, grava relatório e mapa)
+    relatorio  só o relatório, a partir da tabela de volumes que o `mri_synthseg --vol` grava
+    verificar  diz se o motor de segmentação está instalado
 
-    python -m neurolaudo.volumetry.cli relatorio --csv volumes.csv --idade 72 --sexo F --saida pasta
-
-A segmentação em si (FreeSurfer) entra em `engine.py`, a ser testada em um Mac.
+    python -m neurolaudo.volumetry.cli exame --nifti t1.nii --idade 72 --sexo F --saida pasta
 """
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import sys
 
-from neurolaudo.volumetry.norms import Assessment, assess, load_norms
-from neurolaudo.volumetry.report import DISCLAIMER, ReportHeader, flag_text, percentile_text, save_pdf, save_png
-
-
-def read_volumes_csv(path: str, row: str | None = None) -> dict[str, float]:
-    """Lê uma linha do CSV de volumes (mm³). `row`: número da linha de dados (0 = primeira) ou o nome do sujeito."""
-    with open(path, newline="", encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
-    if not rows:
-        raise ValueError("o CSV de volumes está vazio")
-    first_column = next(iter(rows[0]))
-    if row is None:
-        chosen = rows[0]
-    elif row.isdigit():
-        index = int(row)
-        if index >= len(rows):
-            raise ValueError(f"o CSV tem {len(rows)} linha(s) de dados; não existe a linha {index}")
-        chosen = rows[index]
-    else:
-        matches = [r for r in rows if r[first_column] == row]
-        if not matches:
-            raise ValueError(f"não há linha com '{row}' na coluna '{first_column}'")
-        chosen = matches[0]
-    volumes: dict[str, float] = {}
-    for key, value in chosen.items():
-        try:
-            volumes[key.strip()] = float(value)
-        except (TypeError, ValueError):
-            continue
-    return volumes
-
-
-def result_json(assessment: Assessment) -> dict:
-    """O resultado em forma de dados, para o complemento do IsiX mostrar."""
-    return {
-        "aviso": DISCLAIMER,
-        "referencia": assessment.norms.description,
-        "idade": assessment.age,
-        "modelo": assessment.model_key,
-        "volume_intracraniano_ml": round(assessment.icv_mm3 / 1000.0, 1),
-        "avisos": list(assessment.warnings),
-        "estruturas": [
-            {
-                "id": r.structure.id,
-                "nome": r.structure.title,
-                "volume_ml": round(r.volume_ml, 2),
-                "volume_ajustado_ml": round(r.adjusted_mm3 / 1000.0, 2),
-                "z": None if r.z is None else round(r.z, 2),
-                "percentil": None if r.percentile is None else round(r.percentile, 1),
-                "percentil_texto": percentile_text(r),
-                "marca": flag_text(r),
-            }
-            for r in assessment.results
-        ],
-    }
+from neurolaudo.volumetry.norms import assess, load_norms
+from neurolaudo.volumetry.report import DISCLAIMER, ReportHeader, save_pdf, save_png
+from neurolaudo.volumetry.tables import read_volumes_csv, result_json
 
 
 def run_report(args: argparse.Namespace) -> int:
@@ -88,24 +34,82 @@ def run_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def _header_and_subject(args: argparse.Namespace) -> tuple[ReportHeader, float | None, str | None]:
+    """Cabeçalho, idade e sexo: do arquivo --cabecalho, com as opções da linha de comando por cima."""
+    data: dict = {}
+    if getattr(args, "cabecalho", None):
+        with open(args.cabecalho, encoding="utf-8") as fh:
+            data = json.load(fh)
+    def pick(option: str, key: str):
+        value = getattr(args, option, None)
+        return value if value not in (None, "") else data.get(key)
+    age = pick("idade", "idade")
+    sex = pick("sexo", "sexo")
+    header = ReportHeader(patient_name=str(pick("nome", "nome") or ""), patient_id=str(pick("id", "id") or ""),
+                          sex=str(sex or ""), exam_date=str(pick("data", "data") or ""), series=str(pick("serie", "serie") or ""))
+    return header, (None if age is None else float(age)), (None if sex is None else str(sex))
+
+
+def run_exam_command(args: argparse.Namespace) -> int:
+    from neurolaudo.volumetry.pipeline import run_exam
+
+    header, age, sex = _header_and_subject(args)
+
+    def progress(fraction: float, message: str) -> None:
+        print(f"PROGRESSO {fraction:.2f} {message}", flush=True)
+
+    result = run_exam(args.nifti, args.saida, age=age, sex=sex, header=header, threads=args.nucleos, progress=progress)
+    flagged = [e["nome"] for e in result["estruturas"] if e["marca"]]
+    print(f"Volumetria gravada em {args.saida}. Fora da faixa de 5 a 95: {', '.join(flagged) if flagged else 'nenhuma estrutura'}.")
+    for warning in result["avisos"]:
+        print(f"Aviso: {warning}")
+    print(DISCLAIMER)
+    return 0
+
+
+def run_check_command(args: argparse.Namespace) -> int:
+    from neurolaudo.volumetry.pipeline import find_tools
+
+    tools = find_tools()
+    print(f"Motor de segmentação encontrado{' em ' + tools.home if tools.home else ''}.")
+    print("SynthStrip: " + " ".join(tools.synthstrip))
+    print("SynthSeg:   " + " ".join(tools.synthseg))
+    return 0
+
+
+def _add_header_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--idade", type=float, help="idade em anos na data do exame")
+    parser.add_argument("--sexo", help="F ou M")
+    parser.add_argument("--nome", help="nome a mostrar no cabeçalho")
+    parser.add_argument("--id", help="identificador a mostrar no cabeçalho")
+    parser.add_argument("--data", help="data do exame, AAAAMMDD")
+    parser.add_argument("--serie", help="descrição da série usada")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="neurolaudo-volumetria", description="Volumetria cerebral com percentis por idade e sexo.")
     commands = parser.add_subparsers(dest="comando", required=True)
     report = commands.add_parser("relatorio", help="gera o relatório a partir de um CSV de volumes do SynthSeg")
     report.add_argument("--csv", required=True, help="CSV gravado por mri_synthseg --vol")
     report.add_argument("--linha", help="linha de dados (0 = primeira) ou nome do sujeito; padrão: primeira")
-    report.add_argument("--idade", type=float, help="idade em anos na data do exame")
-    report.add_argument("--sexo", help="F ou M")
     report.add_argument("--saida", required=True, help="pasta de saída")
-    report.add_argument("--nome", help="nome a mostrar no cabeçalho")
-    report.add_argument("--id", help="identificador a mostrar no cabeçalho")
-    report.add_argument("--data", help="data do exame, AAAAMMDD")
-    report.add_argument("--serie", help="descrição da série usada")
+    _add_header_options(report)
     report.set_defaults(run=run_report)
+
+    exam = commands.add_parser("exame", help="volumetria completa de um volume T1 em NIfTI")
+    exam.add_argument("--nifti", required=True, help="volume T1 (.nii ou .nii.gz)")
+    exam.add_argument("--saida", required=True, help="pasta de saída")
+    exam.add_argument("--cabecalho", help="arquivo JSON com nome, id, data, serie, idade e sexo (evita nomes na linha de comando)")
+    exam.add_argument("--nucleos", type=int, help="núcleos do processador a usar (padrão: até 8)")
+    _add_header_options(exam)
+    exam.set_defaults(run=run_exam_command)
+
+    check = commands.add_parser("verificar", help="diz se o motor de segmentação está instalado")
+    check.set_defaults(run=run_check_command)
     args = parser.parse_args(argv)
     try:
         return args.run(args)
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, RuntimeError) as error:
         print(f"Erro: {error}", file=sys.stderr)
         return 1
 
