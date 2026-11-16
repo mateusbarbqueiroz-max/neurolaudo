@@ -1,0 +1,80 @@
+name: Volumetria (teste real)
+
+# Instala o motor de volumetria com o mesmo instalador do usuário e roda a
+# segmentação de verdade em um exame PÚBLICO (voluntário IXI002, CC BY-SA 3.0).
+# Compara os volumes com os publicados pelo Neurodesk para o mesmo exame.
+# Acionado à mão. Nenhum dado de paciente.
+
+on:
+  workflow_dispatch:
+    inputs:
+      onde:
+        description: "Onde rodar: linux, mac ou ambos"
+        default: "linux"
+
+permissions:
+  contents: write
+
+env:
+  SUJEITO: IXI002-Guys-0828-T1
+  IDADE: "35.8"
+  SEXO: F
+
+jobs:
+  linux:
+    if: inputs.onde != 'mac'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar o motor de volumetria
+        run: |
+          export NEUROLAUDO_MOTOR="$RUNNER_TEMP/motor"
+          echo "NEUROLAUDO_MOTOR=$NEUROLAUDO_MOTOR" >> "$GITHUB_ENV"
+          time NEUROLAUDO_FONTE="$GITHUB_WORKSPACE/engine" bash mac/instalar-volumetria.sh
+          du -sh "$NEUROLAUDO_MOTOR"
+
+      - name: Baixar o T1 público
+        run: |
+          mkdir -p "$RUNNER_TEMP/ixi" && cd "$RUNNER_TEMP/ixi"
+          # O arquivo é um .tar de 4,5 GB; lê só até achar o primeiro exame.
+          curl -sL --max-time 900 http://biomedic.doc.ic.ac.uk/brain-development/downloads/IXI/IXI-T1.tar \
+            | tar -xf - --occurrence=1 "$SUJEITO.nii.gz" || true
+          ls -la
+          test -s "$SUJEITO.nii.gz"
+
+      - name: Rodar a volumetria
+        run: |
+          nproc; free -g | head -2
+          /usr/bin/time -v "$NEUROLAUDO_MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli exame \
+            --nifti "$RUNNER_TEMP/ixi/$SUJEITO.nii.gz" --saida "$RUNNER_TEMP/saida" \
+            --idade "$IDADE" --sexo "$SEXO" --nome "Voluntário público IXI002" --serie "T1 (banco público IXI)" \
+            2> "$RUNNER_TEMP/tempo.txt" || { cat "$RUNNER_TEMP/tempo.txt"; tail -40 "$RUNNER_TEMP"/saida/trabalho/registro-*.txt; exit 1; }
+          grep -E "Elapsed|Maximum resident" "$RUNNER_TEMP/tempo.txt"
+          cat "$RUNNER_TEMP/saida/resultado.json"
+
+      - name: Comparar com os volumes publicados
+        run: |
+          "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/compare_reference.py \
+            "$RUNNER_TEMP/saida/trabalho/volumes.csv" engine/tests/data/brainquant_ixi_volumes.csv "$SUJEITO" 2.0 \
+            | tee "$RUNNER_TEMP/saida/comparacao.txt"
+
+      - name: Publicar o resultado
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/publicar" && cd "$RUNNER_TEMP/publicar"
+          for f in relatorio.png conferencia.png relatorio.pdf resultado.json comparacao.txt; do
+            [ -f "$RUNNER_TEMP/saida/$f" ] && cp "$RUNNER_TEMP/saida/$f" "linux-$f"
+          done
+          for f in "$RUNNER_TEMP"/saida/trabalho/registro-*.txt "$RUNNER_TEMP/tempo.txt"; do
+            [ -f "$f" ] && cp "$f" "linux-$(basename "$f")"
+          done
+          ls -la
+          if ! gh release view teste-volumetria >/dev/null 2>&1; then
+            gh release create teste-volumetria --title "Teste da volumetria (automático)" --prerelease --latest=false \
+              --notes "Resultado do último teste automático da volumetria em um exame público (voluntário IXI002 do banco IXI, CC BY-SA 3.0, https://brain-development.org/ixi-dataset/). Nenhum dado de paciente. Uso em pesquisa, não validado para diagnóstico."
+          fi
+          if [ -n "$(ls -A .)" ]; then gh release upload teste-volumetria ./* --clobber; fi
