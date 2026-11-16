@@ -129,10 +129,13 @@ def _write_raw(path: Path, array: np.ndarray) -> None:
 
 def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
              header: report.ReportHeader | None = None, threads: int | None = None, tools: Tools | None = None,
-             progress: Progress | None = None, series_notes=()) -> dict:
+             progress: Progress | None = None, series_notes=(), quality: bool = False) -> dict:
     """Roda a volumetria de um volume T1 e grava os resultados em `out_dir`. Devolve o conteúdo de resultado.json.
 
     `series_notes`: avisos sobre a série vindos de quem chamou (por exemplo, "série com contraste").
+    `quality`: pede também as notas automáticas de qualidade do SynthSeg. Fica desligado por padrão: a rede
+    que dá as notas trabalha em 224³ voxels com filtros de 5×5×5 e multiplica a memória necessária (no
+    servidor de teste, sem as otimizações oneDNN, a segmentação parou por falta de memória só por causa dela).
     """
     say = progress or (lambda fraction, message: None)
     started = time.monotonic()
@@ -170,9 +173,11 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
     for stale in (seg_path, vol_path, qc_path):
         stale.unlink(missing_ok=True)   # o SynthSeg acrescenta linhas a tabelas que já existem
     segment_started = time.monotonic()
-    _run([*tools.synthseg, "--i", str(trimmed_path), "--o", str(seg_path), "--vol", str(vol_path), "--qc", str(qc_path),
-          "--fast", "--cpu", "--keepgeom", "--noaddctab", "--threads", str(threads)], tools.env,
-         work / "registro-synthseg.txt", "A segmentação (SynthSeg)", SEGMENT_TIMEOUT_S)
+    command = [*tools.synthseg, "--i", str(trimmed_path), "--o", str(seg_path), "--vol", str(vol_path),
+               "--fast", "--cpu", "--keepgeom", "--noaddctab", "--threads", str(threads)]
+    if quality:
+        command += ["--qc", str(qc_path)]
+    _run(command, tools.env, work / "registro-synthseg.txt", "A segmentação (SynthSeg)", SEGMENT_TIMEOUT_S)
     segment_seconds = time.monotonic() - segment_started
     for needed, what in ((seg_path, "a segmentação"), (vol_path, "a tabela de volumes")):
         if not needed.is_file():

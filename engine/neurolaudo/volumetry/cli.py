@@ -68,7 +68,7 @@ def run_exam_command(args: argparse.Namespace) -> int:
             os.replace(temporary, args.progresso)
 
     result = run_exam(args.nifti, args.saida, age=age, sex=sex, header=header, threads=args.nucleos, progress=progress,
-                      series_notes=[str(n) for n in data.get("avisos", [])])
+                      series_notes=[str(n) for n in data.get("avisos", [])], quality=args.qualidade)
     flagged = [e["nome"] for e in result["estruturas"] if e["marca"]]
     print(f"Volumetria gravada em {args.saida}. Fora da faixa de 5 a 95: {', '.join(flagged) if flagged else 'nenhuma estrutura'}.")
     for warning in result["avisos"]:
@@ -112,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
     exam.add_argument("--cabecalho", help="arquivo JSON com nome, id, data, serie, idade e sexo (evita nomes na linha de comando)")
     exam.add_argument("--nucleos", type=int, help="núcleos do processador a usar (padrão: até 8)")
     exam.add_argument("--progresso", help="arquivo onde gravar o andamento (fração e mensagem)")
+    exam.add_argument("--qualidade", action="store_true",
+                      help="pede também as notas automáticas de qualidade (exige bem mais memória)")
     _add_header_options(exam)
     exam.set_defaults(run=run_exam_command)
 

@@ -69,6 +69,7 @@ def test_exam_from_volume_to_report_and_map(fake_tools, tmp_path):
                                progress=lambda fraction, message: steps.append((fraction, message)))
 
     assert steps[0][0] < steps[-1][0] == 1.0
+    assert result["qualidade"] == {}      # as notas de qualidade só vêm quando pedidas
     assert result["modelo"] == "male" and len(result["estruturas"]) == 10
     assert json.loads((out / "resultado.json").read_text(encoding="utf-8")) == result
     assert (out / "relatorio.pdf").read_bytes().startswith(b"%PDF")
@@ -105,7 +106,7 @@ def test_low_quality_score_becomes_a_warning(fake_tools, tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_LOW_QC", "1")
     t1 = tmp_path / "t1.nii"
     make_t1(t1)
-    result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=40, sex="F")
+    result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=40, sex="F", quality=True)
     assert result["qualidade"]["hipocampo e amígdala"] == 0.41
     assert any("abaixo de 0,65" in w and "hipocampo e amígdala" in w for w in result["avisos"])
 
