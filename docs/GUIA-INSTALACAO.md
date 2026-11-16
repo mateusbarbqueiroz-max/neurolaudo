@@ -166,8 +166,9 @@ basta apagar essa pasta.
 
 1. Abra no IsiX a série **T1 volumétrica (3D) sem contraste** do exame.
 2. Menu **Plugins > Image Filters > Volumetria cerebral (pesquisa)…**.
-3. Aguarde alguns minutos (em servidor de teste levou pouco mais de dois; no
-   seu Mac ainda não foi medido). O IsiX continua utilizável enquanto isso.
+3. Aguarde alguns minutos (em servidor de teste levou de um minuto e meio a
+   dois e meio; no seu Mac ainda não foi medido). O IsiX continua utilizável
+   enquanto isso.
 4. Ao terminar, aparece um resumo com a frase pronta para colar (botão
    **Copiar**), e o exame ganha duas séries novas:
    - **NeuroLaudo: volumetria (pesquisa)**: o relatório, com a tabela, os

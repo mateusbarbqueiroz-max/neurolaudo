@@ -65,8 +65,8 @@ Nenhum exame de paciente.
 | --- | --- | --- |
 | Cálculo dos percentis | Linux, os 561 voluntários da tabela pública | de 88,8 % a 91,3 % dos voluntários entre os percentis 5 e 95, como esperado |
 | Segmentação de verdade, com o recorte original da referência (SynthStrip) | Linux, 8 voluntários, dois hospitais | volumes idênticos aos publicados: 0,00 % em todas as estruturas |
-| Segmentação de verdade, com o recorte que o motor usa hoje (dois passos) | Linux, os mesmos 8 voluntários | tabela abaixo; cerca de 140 s e 6,3 GB por exame |
-| Mesma imagem em Linux e em Mac com Apple Silicon | recorte de 12 cm de um exame público | volumes idênticos (0,00 %); no Mac, 17 a 34 s e 2,8 GB |
+| Segmentação de verdade, com o recorte que o motor usa hoje (dois passos) | Linux, os mesmos 8 voluntários | tabela abaixo; de 1,5 a 2,5 minutos e cerca de 7 GB por exame, conforme o servidor |
+| Mesma imagem em Linux e em Mac com Apple Silicon | recorte de 12 cm de um exame público, três rodadas | volumes idênticos (0,00 %); no Mac, 17 a 34 s e 2,8 GB |
 | Instalador | Linux; Mac com Apple Silicon (macOS 27) com o compilador bloqueado, como no Mac sem Xcode | instala, e as bibliotecas carregam |
 | Comando do complemento dentro do IsiX 6.0.3 | servidor Mac, exame de teste | copia a série, chama o motor, grava relatório (2 imagens) e mapa (96 imagens) no exame, abre o mapa no mesmo corte do T1 e mostra o resumo |
 | Volume gravado pelo complemento | Linux, a cada envio | o motor lê a mesma forma, voxel, orientação e valores |
@@ -83,17 +83,20 @@ mesma idade (o "desvio-padrão" da referência).
 
 | Estrutura | Média | Desvio | Maior | Desvio, em desvios-padrão da referência |
 | --- | --- | --- | --- | --- |
-| Hipocampo esquerdo | −0,36 | 1,15 | 2,38 | 0,16 |
-| Hipocampo direito | +0,19 | 1,24 | 2,27 | 0,17 |
-| Amígdala esquerda | −0,94 | 2,62 | 6,02 | 0,34 |
-| Amígdala direita | −0,64 | 2,13 | 3,99 | 0,29 |
-| Tálamo esquerdo | +0,37 | 1,23 | 1,88 | 0,19 |
-| Tálamo direito | −0,62 | 1,68 | 4,08 | 0,27 |
-| Ventrículos laterais | +0,03 | 0,75 | 1,65 | 0,02 |
-| Córtex cerebral | +0,01 | 0,07 | 0,12 | 0,03 |
-| Substância branca cerebral | +0,01 | 0,14 | 0,19 | 0,04 |
-| Encéfalo (parênquima) | −0,04 | 0,08 | 0,16 | 0,04 |
-| Volume intracraniano | −0,03 | 0,13 | 0,28 | — |
+| Hipocampo esquerdo | −0,34 | 1,13 | 2,27 | 0,15 |
+| Hipocampo direito | +0,05 | 1,20 | 2,27 | 0,16 |
+| Amígdala esquerda | −0,63 | 3,16 | 6,02 | 0,42 |
+| Amígdala direita | −0,79 | 2,07 | 3,99 | 0,28 |
+| Tálamo esquerdo | +0,40 | 1,20 | 1,88 | 0,18 |
+| Tálamo direito | −0,33 | 2,24 | 4,08 | 0,36 |
+| Ventrículos laterais | −0,03 | 0,76 | 1,65 | 0,02 |
+| Córtex cerebral | +0,02 | 0,06 | 0,12 | 0,02 |
+| Substância branca cerebral | 0,00 | 0,14 | 0,19 | 0,04 |
+| Encéfalo (parênquima) | −0,03 | 0,07 | 0,14 | 0,04 |
+| Volume intracraniano | −0,03 | 0,12 | 0,28 | — |
+
+Em sete dos oito exames o motor fez as duas segmentações. No oitavo, a caixa
+da cabeça já estava a menos de 6 mm da caixa final, e ele parou na primeira.
 
 Leitura: nas estruturas grandes o motor reproduz a referência. Nas pequenas
 (hipocampo, amígdala, tálamo) há um ruído de 1 a 3 %, sem desvio para um lado:
@@ -106,7 +109,7 @@ exemplo, 4 ou 6) deve ser lido como limítrofe.
 ## O que falta conferir
 
 - **Exame inteiro em Mac.** O servidor Mac do GitHub tem 7 GB de memória e o
-  exame inteiro não cabe nele. Em Linux o motor usou 6,3 GB; o Mac novo, com
+  exame inteiro não cabe nele. Em Linux o motor usou cerca de 7 GB; o Mac novo, com
   16 GB ou mais, deve dar conta, mas tempo e memória só serão medidos nele.
 - **Exames reais.** Nomes de série do hospital, aparelhos, exames com contraste
   e anatomia alterada. Tudo o que foi medido até aqui é de voluntários

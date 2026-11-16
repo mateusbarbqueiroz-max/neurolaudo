@@ -21,8 +21,8 @@ from neurolaudo.volumetry.pipeline import run_exam
 from neurolaudo.volumetry.report import ReportHeader
 from neurolaudo.volumetry.tables import read_volumes_csv
 
-# Limites para o recorte em dois passos, o padrão do motor. Na rodada de 16/11/2026 a maior média foi de
-# 0,94 % (amígdala esquerda) e a maior diferença em um exame, de 6,0 % (também amígdala).
+# Limites para o recorte em dois passos, o padrão do motor. Na rodada final de 16/11/2026 a maior média foi
+# de 0,79 % (amígdala direita) e a maior diferença em um exame, de 6,0 % (amígdala esquerda).
 MEAN_LIMIT = 1.5      # % de desvio médio aceito por estrutura
 SINGLE_LIMIT = 8.0    # % de diferença aceita em um sujeito
 
