@@ -23,7 +23,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Usar as medidas em um exame real, desenhando as linhas à mão (Evans, linha média, ABC/2), e abrir o painel do ASPECTS | Junto com o item acima | Média: o cálculo já foi conferido dentro do IsiX com marcas desenhadas pelo complemento; faltam o uso à mão e as telas |
 | Enviar os nomes das séries dos exames de rotina (RM de encéfalo e TC de crânio) | Quando puder; dá para ver no OsiriX MD atual | Média: ajusta os protocolos de exibição ao serviço |
 | Conferir os valores das janelas de TC (encéfalo 40/80, AVC 40/40, subdural 75/215, osso 600/2800, angio-TC 200/700, partes moles 50/350) | Quando puder | Média |
-| Ver o exemplo do relatório de volumetria (`docs/exemplo-volumetria.png`) e dizer o que mudar: estruturas, ordem, palavras, frase para o laudo | Quando puder; não precisa de Mac | Média: é a hora mais barata de mudar |
+| Ver os exemplos da volumetria (`docs/exemplo-volumetria.png`, `docs/exemplo-conferencia.png`, `docs/volumetria-no-isix.png`) e dizer o que mudar: estruturas, ordem, cores, palavras, frase para o laudo | Quando puder; não precisa de Mac | Média: é a hora mais barata de mudar |
 | Instalar o motor de volumetria (Passo 8 do guia) e rodar em um T1 volumétrico; conferir o mapa colorido e contar o tempo que levou | Quando houver o Mac novo | Alta para a volumetria: é o primeiro teste em exame real |
 | Se houver laudos do NeuroQuant de exames antigos, rodar a nossa volumetria nos mesmos exames e comparar | Depois do item acima | Média: mostra o quanto os dois métodos diferem |
 
@@ -39,6 +39,14 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Laudo | etapas anteriores |
 
 ## Feito
+
+- Volumetria (16/11/2026; números em `docs/VOLUMETRIA.md`):
+  - o motor reproduz a referência nas estruturas grandes e tem ruído de 1 a 3 %, sem desvio, nas
+    pequenas, em 8 voluntários públicos;
+  - a mesma imagem dá volumes idênticos em Linux e em Mac com Apple Silicon (recorte de 12 cm);
+  - o instalador funciona em Mac sem compilador;
+  - o comando roda do começo ao fim dentro do IsiX com o exame de teste, e o mapa colorido abre ao
+    lado do T1, no mesmo corte.
 
 - Código no GitHub; testes em Linux e compilação em Mac a cada envio.
 - Complemento carregado pelo IsiX 6.0.3 no servidor Mac, com os 14 comandos no menu.

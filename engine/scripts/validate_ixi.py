@@ -21,8 +21,10 @@ from neurolaudo.volumetry.pipeline import run_exam
 from neurolaudo.volumetry.report import ReportHeader
 from neurolaudo.volumetry.tables import read_volumes_csv
 
-MEAN_LIMIT = 0.2      # % de desvio médio aceito por estrutura (a rodada de 16/11/2026 deu 0,00)
-SINGLE_LIMIT = 1.0    # % de diferença aceita em um sujeito
+# Limites para o recorte em dois passos, o padrão do motor. Na rodada de 16/11/2026 a maior média foi de
+# 0,94 % (amígdala esquerda) e a maior diferença em um exame, de 6,0 % (também amígdala).
+MEAN_LIMIT = 1.5      # % de desvio médio aceito por estrutura
+SINGLE_LIMIT = 8.0    # % de diferença aceita em um sujeito
 
 
 def differences(norms, measured: dict, published: dict) -> list[float]:
@@ -108,7 +110,7 @@ def main(argv: list[str]) -> int:
     text = "\n".join(report)
     print("\n" + text)
     (out / "validacao.txt").write_text(text + "\n", encoding="utf-8")
-    return 0
+    return 1 if failed_two else 0
 
 
 if __name__ == "__main__":

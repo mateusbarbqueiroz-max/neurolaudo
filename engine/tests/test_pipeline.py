@@ -69,18 +69,18 @@ def test_exam_from_volume_to_report_and_map(fake_tools, tmp_path):
 
     assert steps[0][0] < steps[-1][0] == 1.0
     assert result["qualidade"] == {}      # as notas de qualidade só vêm quando pedidas
-    assert result["recorte"]["segmentacoes"] == 1
     assert result["modelo"] == "male" and len(result["estruturas"]) == 10
     assert json.loads((out / "resultado.json").read_text(encoding="utf-8")) == result
     assert (out / "relatorio.pdf").read_bytes().startswith(b"%PDF")
     assert (out / "relatorio.png").exists() and (out / "conferencia.png").exists()
 
-    # O recorte tira ar em volta, sem cortar nada do que é cabeça.
-    low, high = result["recorte"]["inicio"], result["recorte"]["fim"]
+    # Dois passos: primeiro a caixa da cabeça, depois a das normas (o que foi segmentado mais 15 mm).
+    cut = result["recorte"]
     occupied = np.argwhere(data > 50)
-    assert all(l <= int(v) for l, v in zip(low, occupied.min(0)))
-    assert all(h > int(v) for h, v in zip(high, occupied.max(0)))
-    assert np.prod([h - l for l, h in zip(low, high)]) < 0.8 * data.size
+    assert cut["segmentacoes"] == 2 and cut["primeiro_passo"] is not None
+    assert cut["inicio"] == [max(int(v) - 15, 0) for v in occupied.min(0)]
+    assert cut["fim"] == [min(int(v) + 16, n) for v, n in zip(occupied.max(0), data.shape)]
+    assert (out / "trabalho" / "volumes-primeiro-passo.csv").is_file()
 
     # As páginas e o mapa têm o tamanho que o resultado declara.
     for page in result["paginas"]:
@@ -111,15 +111,26 @@ def test_low_quality_score_becomes_a_warning(fake_tools, tmp_path, monkeypatch):
     assert any("abaixo de 0,65" in w and "hipocampo e amígdala" in w for w in result["avisos"])
 
 
-def test_brain_at_the_edge_of_the_crop_makes_the_engine_widen_it_and_try_again(fake_tools, tmp_path, monkeypatch):
+def test_one_pass_is_available_and_a_brain_at_the_edge_is_reported(fake_tools, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_TOUCH_ONCE", str(tmp_path / "encostou"))
+    t1 = tmp_path / "t1.nii"
+    make_t1(t1)
+    result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=40, sex="F", refine=False)
+    assert result["recorte"]["segmentacoes"] == 1 and result["recorte"]["primeiro_passo"] is None
+    # Com um passo só, o "córtex" encostado na face da frente vira aviso no relatório.
+    assert any("encosta na borda do recorte (frente)" in w for w in result["avisos"])
+
+
+def test_brain_touching_the_first_crop_is_recovered_by_the_second_pass(fake_tools, tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_TOUCH_ONCE", str(tmp_path / "encostou"))
     t1 = tmp_path / "t1.nii"
     make_t1(t1)
     first = volume.head_box(nib.load(str(t1)))
     result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=40, sex="F")
-    assert result["recorte"]["segmentacoes"] == 2
-    assert result["recorte"]["inicio"][0] < first.low[0] and result["recorte"]["fim"] == list(first.high)
-    assert not any("encosta" in w for w in result["avisos"])     # na segunda vez não encostou
+    # A caixa cresce para o lado em que encostou, e a segmentação é refeita até a caixa parar de mudar.
+    assert result["recorte"]["segmentacoes"] == 3
+    assert result["recorte"]["primeiro_passo"]["inicio"] == list(first.low)
+    assert not any("encosta" in w for w in result["avisos"])
 
 
 def test_segmenter_failure_is_reported_with_its_log(fake_tools, tmp_path, monkeypatch):
@@ -214,7 +225,11 @@ def test_brain_touching_the_box_is_detected_and_the_box_grows():
     assert faces == [(0, 0)] and volume.face_name(image, faces[0]) == "frente"
     box = volume.Box((8, 0, 4), (48, 50, 64))
     assert not volume.at_image_edge(box, (0, 0), (80, 50, 64)) and volume.at_image_edge(box, (1, 0), (80, 50, 64))
-    assert volume.grow(box, [(0, 0), (2, 1)], (2.0, 1.0, 1.0), (80, 50, 64)) == volume.Box((0, 0, 4), (48, 50, 64))
+    # A caixa das normas: o que foi rotulado (liquor incluído) mais 15 mm, sem sair da imagem.
+    target = volume.brain_box(labels, volume.Box((5, 0, 0), (45, 50, 60)), (1.0, 1.0, 1.0), (60, 50, 70))
+    assert target == volume.Box((0, 0, 0), (50, 50, 70))
+    assert volume.close_enough(box, volume.Box((10, 0, 4), (48, 50, 60)), (2.0, 1.0, 1.0))
+    assert not volume.close_enough(box, volume.Box((12, 0, 4), (48, 50, 64)), (2.0, 1.0, 1.0))
 
 
 def test_head_box_refuses_an_image_without_a_head():
@@ -268,16 +283,3 @@ def test_fake_engine_folder_and_t1_phantom_work_together(tmp_path, monkeypatch):
     result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=68.7, sex="F")
     assert result["entrada"]["orientacao"] == "PIR"
     assert result["mapa"] == {"arquivo": "mapa.rgba", "cortes": 96, "linhas": 112, "colunas": 128}
-
-
-def test_second_pass_recrops_to_what_was_segmented_plus_15_mm(fake_tools, tmp_path):
-    t1, out = tmp_path / "t1.nii", tmp_path / "saida"
-    affine, data = make_t1(t1)
-    result = pipeline.run_exam(str(t1), str(out), age=40, sex="F", refine=True)
-    cut = result["recorte"]
-    assert cut["segmentacoes"] == 2 and cut["primeiro_passo"] is not None
-    assert (out / "trabalho" / "volumes-primeiro-passo.csv").is_file()
-    # A caixa final é a do que o segmentador rotulou (aqui, tudo acima de 50) mais 15 mm, dentro da imagem.
-    occupied = np.argwhere(data > 50)
-    assert cut["inicio"] == [max(int(v) - 15, 0) for v in occupied.min(0)]
-    assert cut["fim"] == [min(int(v) + 16, n) for v, n in zip(occupied.max(0), data.shape)]

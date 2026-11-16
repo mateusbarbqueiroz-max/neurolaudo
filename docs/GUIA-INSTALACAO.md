@@ -151,7 +151,7 @@ adultos saudáveis da mesma idade e sexo. **Não é validada para diagnóstico**
 apoio, como o restante do NeuroLaudo. Os detalhes e o que já foi conferido
 estão em `docs/VOLUMETRIA.md`.
 
-**Instalar o motor (uma vez).** É um programa à parte, de cerca de 2,5 GB, que
+**Instalar o motor (uma vez).** É um programa à parte, de cerca de 2 GB, que
 fica em uma pasta só e não exige Xcode. Cole no Terminal e aguarde alguns
 minutos:
 
@@ -166,16 +166,21 @@ basta apagar essa pasta.
 
 1. Abra no IsiX a série **T1 volumétrica (3D) sem contraste** do exame.
 2. Menu **Plugins > Image Filters > Volumetria cerebral (pesquisa)…**.
-3. Aguarde alguns minutos. O IsiX continua utilizável enquanto isso.
+3. Aguarde alguns minutos (em servidor de teste levou pouco mais de dois; no
+   seu Mac ainda não foi medido). O IsiX continua utilizável enquanto isso.
 4. Ao terminar, aparece um resumo com a frase pronta para colar (botão
    **Copiar**), e o exame ganha duas séries novas:
    - **NeuroLaudo: volumetria (pesquisa)**: o relatório, com a tabela, os
      percentis e os gráficos, e uma página de conferência;
    - **NeuroLaudo: mapa da segmentação (pesquisa)**: o T1 com as estruturas
-     coloridas, corte a corte, que abre sozinho.
+     coloridas, corte a corte, que abre sozinho ao lado, no mesmo corte em que
+     o T1 está (veja `docs/volumetria-no-isix.png`).
 5. **Confira o mapa antes de usar os números**: cada estrutura no lugar e do
    lado certo. Hipocampo, amígdala e tálamo têm uma cor para cada lado
    justamente para que uma troca de lado apareça.
+6. Percentil de estrutura pequena perto do limite (por exemplo, hipocampo no
+   percentil 4 ou 6) deve ser lido como limítrofe: o método tem um ruído de
+   1 a 3 % nessas estruturas.
 
 O comando recusa séries que não servem (TC, série com poucos cortes, FLAIR,
 difusão) e avisa quando o nome da série sugere contraste. A imagem não sai do

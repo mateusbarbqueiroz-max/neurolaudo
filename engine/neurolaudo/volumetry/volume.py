@@ -76,13 +76,13 @@ def paste_labels(full_shape, box: Box, trimmed_labels: np.ndarray) -> np.ndarray
 #   contorno da cabeça fica a cerca de 15 mm do encéfalo (liquor, osso e couro cabeludo), que é a
 #   margem das normas.
 #
-# Depois de segmentar, `touching_faces` confere se o encéfalo encostou em alguma face da caixa; se
-# encostou, o motor alarga a caixa e segmenta de novo.
+# Essa caixa serve para a primeira segmentação. Com o encéfalo já localizado, `brain_box` dá a caixa
+# das normas (o que foi segmentado mais 15 mm) e o motor segmenta de novo. `touching_faces` diz se,
+# no fim, o encéfalo ainda encosta em alguma face (a imagem pode não conter a cabeça toda).
 
 HEAD_HEIGHT_MM = 180.0       # do topo da cabeça para baixo: encéfalo, cerebelo e folga
 CALVARIUM_MM = (25.0, 100.0)  # faixa abaixo do topo onde se medem a largura e o comprimento
 HEAD_MARGIN_MM = 5.0         # folga em volta
-GROW_MM = 20.0               # quanto a caixa cresce de cada lado em que o encéfalo encostou
 BRAIN_MARGIN_MM = 15.0       # margem das normas em volta do encéfalo
 _COARSE_MM = 4.0             # a cabeça é procurada em blocos de cerca de 4 mm, para o ruído não atrapalhar
 _SIDE_NAMES = {"R": "direita", "L": "esquerda", "A": "frente", "P": "trás", "S": "topo", "I": "base"}
@@ -211,16 +211,14 @@ def at_image_edge(box: Box, face: tuple[int, int], shape) -> bool:
     return box.low[axis] == 0 if side == 0 else box.high[axis] == shape[axis]
 
 
-def grow(box: Box, faces, zooms, shape, mm: float = GROW_MM) -> Box:
-    """A caixa alargada em `mm` nas faces dadas, sem sair da imagem."""
-    low, high = list(box.low), list(box.high)
-    for axis, side in faces:
-        step = int(np.ceil(mm / zooms[axis]))
-        if side == 0:
-            low[axis] = max(0, low[axis] - step)
-        else:
-            high[axis] = min(int(shape[axis]), high[axis] + step)
-    return Box(tuple(low), tuple(high))
+def close_enough(box: Box, target: Box, zooms, tolerance_mm: float = 6.0) -> bool:
+    """As duas caixas diferem menos que a tolerância em todas as faces?"""
+    for axis in range(3):
+        if abs(box.low[axis] - target.low[axis]) * zooms[axis] > tolerance_mm:
+            return False
+        if abs(box.high[axis] - target.high[axis]) * zooms[axis] > tolerance_mm:
+            return False
+    return True
 
 
 def brain_box(trimmed_labels: np.ndarray, box: Box, zooms, shape, margin_mm: float = BRAIN_MARGIN_MM) -> Box:

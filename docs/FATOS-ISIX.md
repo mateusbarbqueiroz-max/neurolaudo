@@ -227,3 +227,8 @@ a geometria de cada corte; o centro do pixel (coluna c, linha r) fica em
 `imagePosition + rowDirection·(c·columnSpacing) + columnDirection·(r·rowSpacing)`;
 `startTask` roda o trabalho fora da linha principal; gravar e importar séries
 exige a capacidade `database.import` no `Info.plist`.
+
+- **Posição da série nova.** Ao abrir o mapa colorido, o IsiX o posiciona no mesmo corte (mesma
+  posição em milímetros) em que o T1 está, e os dois visualizadores mostram as mesmas coordenadas.
+  A numeração dos cortes do mapa sai no sentido contrário ao do T1 (o IsiX ordena a série nova a
+  seu modo), o que não atrapalha a correspondência por posição. Captura: `docs/volumetria-no-isix.png`.

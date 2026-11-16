@@ -42,9 +42,9 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
   - `LinuxCheck/`: imitação do kit, só para conferir e testar em Linux.
   - `script/`, `Config/`, `NeuroLaudo.xcodeproj`: do modelo de plugin do IsiX.
 - `engine/`: motor em Python.
-  - `neurolaudo/volumetry/`: `pipeline.py` (SynthStrip, recorte, SynthSeg, normas), `norms.py`,
+  - `neurolaudo/volumetry/`: `pipeline.py` (recorte, SynthSeg, normas), `norms.py`,
     `report.py` e `overlay.py` (páginas), `volume.py` (NIfTI), `tables.py`, `cli.py`.
-  - `tests/fakes/`: programas de mentira no lugar do SynthStrip e do SynthSeg.
+  - `tests/fakes/`: segmentador de mentira no lugar do SynthSeg.
   - `scripts/`: fantomas (`make_phantom.py`, `--rm`, `--t1`), validação e diagnóstico da volumetria.
 - `mac/`: scripts para o Mac do usuário (`instalar.sh`, `botao-pacs.sh`, `instalar-volumetria.sh`).
 - `docs/VOLUMETRIA.md`: como a volumetria funciona, o que foi medido e o que falta conferir.
@@ -55,7 +55,7 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
 - Testes do motor: `cd engine && python -m pytest -q`.
 - Compilar o complemento: só em macOS, `plugin/script/build.sh --configuration Release`.
 - Acionar testes no GitHub: `gh workflow run ARQUIVO.yml --ref main [-f chave=valor]` (sem `--ref` falha).
-  `isix.yml`: complemento dentro do IsiX. `volumetria.yml -f onde=linux|mac|ambos|diagnostico`:
+  `isix.yml`: complemento dentro do IsiX. `volumetria.yml -f onde=linux|miniatura|ambos|diagnostico`:
   segmentação de verdade em exames públicos.
 - Ler o resultado: `gh api repos/DONO/REPO/actions/runs/ID/jobs` (passos), `.../actions/jobs/ID/logs`
   (registro) e os arquivos das versões `teste-isix` e `teste-volumetria` (baixar com `curl`).
@@ -83,9 +83,18 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
   só existem em Linux.
 - Nesta sessão `sleep` longo em primeiro plano é bloqueado e o GraphQL do GitHub não funciona
   (`gh release view`, `gh run view`): usar a API REST.
-- Volumetria: TensorFlow e PyTorch não podem ser importados no mesmo processo (aborta com
-  "random_device"). O `mri_synthseg` da instalação mínima precisa de `--noaddctab`. A opção `--qc`
-  muda os volumes e estoura a memória: fica desligada. A biblioteca `surfa` só existe em
-  código-fonte: a versão compilada para Mac fica na versão `motor` do repositório.
+- Volumetria, medido em 16/11/2026 (detalhes em `docs/VOLUMETRIA.md`):
+  - O `mri_synthseg` da instalação mínima precisa de `--noaddctab`. A opção `--qc` muda os volumes e
+    estoura a memória: fica desligada.
+  - O SynthStrip (PyTorch) não roda em Apple Silicon em tempo razoável: saiu do motor. O recorte é
+    feito em dois passos (`volume.head_box`, depois `volume.brain_box`).
+  - Qualquer mudança no recorte muda os volumes das estruturas pequenas em 1 a 3 % (ruído do
+    SynthSeg). Mexer no recorte exige rodar de novo `volumetria.yml -f onde=linux` e comparar.
+  - Em Linux, sem oneDNN e com 4 núcleos, o TensorFlow faz um pedido grande de memória que o Linux
+    recusa (bad_alloc) embora use só 7 GB: os testes ligam `vm.overcommit_memory=1`. O macOS não recusa.
+  - O servidor Mac do GitHub tem 7 GB: o exame inteiro não cabe; lá só se testa o recorte de 12 cm.
+  - A biblioteca `surfa` só existe em código-fonte: a versão compilada para Mac fica na versão `motor`
+    do repositório, publicada pelo próprio teste.
+  - O IsiX abre a série nova no mesmo corte (posição) em que a série de origem está.
 - O matplotlib desta sessão usa a fonte Inter por configuração local; as páginas fixam DejaVu Sans
   para saírem iguais em qualquer máquina.

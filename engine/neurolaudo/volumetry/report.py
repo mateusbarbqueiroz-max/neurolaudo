@@ -244,8 +244,9 @@ def build_figure(assessment: Assessment, header: ReportHeader, notes=(), footnot
              f"{br(assessment.norms.age_min, 0)} a {br(assessment.norms.age_max, 0)} anos.",
              "As curvas mostram o volume ajustado a um volume intracraniano de "
              f"{br(assessment.norms.reference_icv_mm3 / 1000.0, 0)} mL.",
-             "Limites: entre aparelhos o resultado pode deslocar até cerca de 0,5 desvio-padrão; "
-             "medida de um único momento, não mede perda ao longo do tempo."]
+             "Limites: entre aparelhos o resultado pode deslocar até cerca de 0,5 desvio-padrão; nas estruturas "
+             "pequenas, o enquadramento da imagem muda o volume em 1 a 3 %; medida de um único momento, não mede "
+             "perda ao longo do tempo."]
     lines += list(footnotes)
     y = 0.165
     for line in lines:

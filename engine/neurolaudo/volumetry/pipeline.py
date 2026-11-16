@@ -39,7 +39,7 @@ QC_THRESHOLD = 0.65          # abaixo disso os autores do SynthSeg tratam a segm
 MAX_VOXEL_MM = 1.5           # acima disso a série não é um T1 volumétrico fino
 PAGE_DPI = 150
 SEGMENT_TIMEOUT_S = 40 * 60
-MAX_ATTEMPTS = 3             # segmentações por exame: a primeira e até duas com recorte maior
+MAX_ATTEMPTS = 3             # segmentações por exame: em geral duas; a terceira só se a caixa ainda mudar
 MODEL_FILES = ("synthseg_2.0.h5", "synthseg_qc_2.0.h5")
 
 Progress = Callable[[float, str], None]
@@ -134,12 +134,13 @@ def _write_raw(path: Path, array: np.ndarray) -> None:
 
 def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
              header: report.ReportHeader | None = None, threads: int | None = None, tools: Tools | None = None,
-             progress: Progress | None = None, series_notes=(), quality: bool = False, refine: bool = False) -> dict:
+             progress: Progress | None = None, series_notes=(), quality: bool = False, refine: bool = True) -> dict:
     """Roda a volumetria de um volume T1 e grava os resultados em `out_dir`. Devolve o conteúdo de resultado.json.
 
     `series_notes`: avisos sobre a série vindos de quem chamou (por exemplo, "série com contraste").
     `refine`: depois da primeira segmentação, recorta de novo pela caixa das normas (o que foi segmentado mais
-    15 mm) e segmenta outra vez. Dobra o tempo; scripts/validate_ixi.py mede se compensa.
+    15 mm) e segmenta outra vez. Dobra o tempo e é o padrão: em 8 voluntários públicos (16/11/2026) tirou o
+    desvio que o recorte só pela cabeça mostrava na amígdala direita (-2,4 % em média) e no hipocampo direito.
     `quality`: pede também as notas automáticas de qualidade do SynthSeg. Fica desligado por padrão por dois
     motivos medidos no exame público IXI002: com as notas, os volumes deixam de ser idênticos aos da tabela que
     ajustou as normas (até 1,3 % de diferença no córtex), e a memória necessária estoura (a rede das notas
@@ -197,25 +198,20 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
         return piece, found
 
     try:
-        trimmed, trimmed_labels = segment(box, 0.10, "Segmentando (alguns minutos)")
-        # O encéfalo encostou em alguma face do recorte? Então pode ter ficado um pedaço de fora:
-        # alarga a caixa desse lado e segmenta de novo (no máximo duas vezes).
-        while True:
-            touching = volume.touching_faces(trimmed_labels, trimmed)
-            growable = [face for face in touching if not volume.at_image_edge(box, face, image.shape)]
-            if not growable or attempts >= MAX_ATTEMPTS:
+        trimmed, trimmed_labels = segment(box, 0.10, "Segmentando (passo 1)" if refine else "Segmentando (alguns minutos)")
+        # Agora que se sabe onde está o encéfalo, o recorte passa a ser o das normas: o que foi segmentado
+        # mais 15 mm. Se a caixa mudar de verdade (ou se o encéfalo tiver encostado em alguma face, caso em que
+        # a caixa cresce desse lado), segmenta de novo. Em geral são duas segmentações; no máximo três.
+        while refine and attempts < MAX_ATTEMPTS:
+            target = volume.brain_box(trimmed_labels, box, zooms, image.shape)
+            if volume.close_enough(box, target, zooms):
                 break
-            box = volume.grow(box, growable, zooms, image.shape)
-            trimmed, trimmed_labels = segment(box, 0.40, "Segmentando de novo, com recorte maior")
-        if refine:
-            # Segundo passo: a caixa das normas (o que foi segmentado mais 15 mm), agora que se sabe onde
-            # está o encéfalo. Os volumes do primeiro passo ficam guardados para comparação.
-            refined = volume.brain_box(trimmed_labels, box, zooms, image.shape)
-            if refined != box:
+            if first_box is None:
                 shutil.copy(vol_path, work / "volumes-primeiro-passo.csv")
-                first_box, box = box, refined
-                trimmed, trimmed_labels = segment(box, 0.50, "Segmentando com o recorte das normas")
-                touching = volume.touching_faces(trimmed_labels, trimmed)
+                first_box = box
+            box = target
+            trimmed, trimmed_labels = segment(box, 0.25 + 0.25 * attempts, f"Segmentando (passo {attempts + 1})")
+        touching = volume.touching_faces(trimmed_labels, trimmed)
         labels = volume.paste_labels(image.shape, box, trimmed_labels)
     except volume.VolumeError as error:
         raise PipelineError(str(error)) from error

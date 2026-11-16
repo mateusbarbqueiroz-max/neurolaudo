@@ -18,21 +18,28 @@ A partir de um T1 volumétrico (3D) sem contraste:
   segmentação ao lado do T1;
 - uma frase pronta para colar no laudo, já com a ressalva de uso em pesquisa.
 
-Exemplo do relatório, com um voluntário de banco público: `docs/exemplo-volumetria.png`.
+Exemplos, com voluntários de banco público (não são pacientes):
+
+- `docs/exemplo-volumetria.png`: o relatório (voluntário IXI072);
+- `docs/exemplo-conferencia.png`: a página de conferência, com segmentação de
+  verdade (voluntário IXI002);
+- `docs/volumetria-no-isix.png`: o resultado dentro do IsiX, com o exame de
+  teste (fantoma): o T1 à esquerda e o mapa colorido à direita, no mesmo corte.
 
 ## Como funciona
 
 1. **No IsiX**, o comando *Plugins > Image Filters > Volumetria cerebral
    (pesquisa)…* copia os cortes da série aberta para um arquivo de volume. A
    posição e a orientação de cada corte vêm do próprio exame.
-2. **O motor** (programa em Python instalado à parte, `mac/instalar-volumetria.sh`)
-   repete os passos usados para construir a referência:
-   - localiza o encéfalo (SynthStrip);
-   - recorta a imagem em volta dele, com 15 mm de margem;
+2. **O motor** (programa em Python instalado à parte, `mac/instalar-volumetria.sh`):
+   - acha a cabeça na imagem e recorta em volta dela;
    - segmenta com o SynthSeg 2.0 em modo rápido, no processador;
+   - recorta de novo, agora pelo que foi segmentado mais 15 mm (a mesma caixa
+     usada para construir a referência), e segmenta outra vez;
    - compara cada volume com a referência por idade e sexo.
 3. **De volta ao IsiX**, o complemento grava no exame duas séries novas (o
-   relatório e o mapa colorido), abre o mapa e mostra o resumo.
+   relatório e o mapa colorido), abre o mapa no mesmo corte em que o T1 está e
+   mostra o resumo.
 
 A imagem não sai do Mac. A pasta temporária, com a imagem e o nome do paciente,
 é apagada no fim, dê certo ou não.
@@ -41,29 +48,96 @@ A imagem não sai do Mac. A pasta temporária, com a imagem e o nome do paciente
 
 | Peça | Origem | Licença |
 | --- | --- | --- |
-| `mri_synthseg` e `mri_synthstrip` | FreeSurfer 8.2.0, baixados do repositório oficial e conferidos por soma SHA-256 | licença do FreeSurfer; SynthSeg, Apache 2.0 |
-| Modelos treinados (SynthSeg 2.0 e SynthStrip) | servidor oficial do FreeSurfer, conferidos por soma SHA-256 | idem |
+| `mri_synthseg` | FreeSurfer 8.2.0, baixado do repositório oficial e conferido por soma SHA-256 | licença do FreeSurfer; SynthSeg, Apache 2.0 |
+| Modelos treinados do SynthSeg 2.0 | servidor oficial do FreeSurfer, conferidos por soma SHA-256 | idem |
 | Biblioteca `surfa` 0.6.3 | FreeSurfer; compilada pelo projeto para Mac, porque só existe em código-fonte | MIT |
 | Referência (normas) | Neurodesk, `recipes/synthseg/brainquant_norms.json`: 561 adultos saudáveis do banco IXI, de 20 a 86 anos | MIT; dados do IXI, CC BY-SA 3.0 |
 
 Não é a instalação completa do FreeSurfer (20 GB): o instalador baixa só essas
-peças, cerca de 2,5 GB com o Python e as bibliotecas.
+peças, cerca de 2 GB com o Python e as bibliotecas.
+
+## O que foi conferido (16/11/2026)
+
+Tudo em servidores do GitHub, com exames públicos ou com o exame de teste.
+Nenhum exame de paciente.
+
+| O quê | Onde | Resultado |
+| --- | --- | --- |
+| Cálculo dos percentis | Linux, os 561 voluntários da tabela pública | de 88,8 % a 91,3 % dos voluntários entre os percentis 5 e 95, como esperado |
+| Segmentação de verdade, com o recorte original da referência (SynthStrip) | Linux, 8 voluntários, dois hospitais | volumes idênticos aos publicados: 0,00 % em todas as estruturas |
+| Segmentação de verdade, com o recorte que o motor usa hoje (dois passos) | Linux, os mesmos 8 voluntários | tabela abaixo; cerca de 140 s e 6,3 GB por exame |
+| Mesma imagem em Linux e em Mac com Apple Silicon | recorte de 12 cm de um exame público | volumes idênticos (0,00 %); no Mac, 17 a 34 s e 2,8 GB |
+| Instalador | Linux; Mac com Apple Silicon (macOS 27) com o compilador bloqueado, como no Mac sem Xcode | instala, e as bibliotecas carregam |
+| Comando do complemento dentro do IsiX 6.0.3 | servidor Mac, exame de teste | copia a série, chama o motor, grava relatório (2 imagens) e mapa (96 imagens) no exame, abre o mapa no mesmo corte do T1 e mostra o resumo |
+| Volume gravado pelo complemento | Linux, a cada envio | o motor lê a mesma forma, voxel, orientação e valores |
+
+No teste dentro do IsiX só a segmentação era uma imitação (rótulos por
+limiar); o restante do motor era o de verdade.
+
+### Diferença em relação aos volumes publicados, com o recorte atual
+
+Diferença, em %, entre o volume medido pelo motor e o publicado pelo Neurodesk
+para o mesmo exame, nos 8 voluntários. A última coluna põe o desvio em
+perspectiva: quanto ele representa da variação entre pessoas saudáveis da
+mesma idade (o "desvio-padrão" da referência).
+
+| Estrutura | Média | Desvio | Maior | Desvio, em desvios-padrão da referência |
+| --- | --- | --- | --- | --- |
+| Hipocampo esquerdo | −0,36 | 1,15 | 2,38 | 0,16 |
+| Hipocampo direito | +0,19 | 1,24 | 2,27 | 0,17 |
+| Amígdala esquerda | −0,94 | 2,62 | 6,02 | 0,34 |
+| Amígdala direita | −0,64 | 2,13 | 3,99 | 0,29 |
+| Tálamo esquerdo | +0,37 | 1,23 | 1,88 | 0,19 |
+| Tálamo direito | −0,62 | 1,68 | 4,08 | 0,27 |
+| Ventrículos laterais | +0,03 | 0,75 | 1,65 | 0,02 |
+| Córtex cerebral | +0,01 | 0,07 | 0,12 | 0,03 |
+| Substância branca cerebral | +0,01 | 0,14 | 0,19 | 0,04 |
+| Encéfalo (parênquima) | −0,04 | 0,08 | 0,16 | 0,04 |
+| Volume intracraniano | −0,03 | 0,13 | 0,28 | — |
+
+Leitura: nas estruturas grandes o motor reproduz a referência. Nas pequenas
+(hipocampo, amígdala, tálamo) há um ruído de 1 a 3 %, sem desvio para um lado:
+com oito exames, nenhuma média se afasta de zero mais do que o acaso explica.
+Esse ruído vem do próprio SynthSeg, que dá um resultado um pouco diferente
+conforme o enquadramento da imagem; ele existe também entre dois exames da
+mesma pessoa. Na prática, um percentil de hipocampo perto do limite (por
+exemplo, 4 ou 6) deve ser lido como limítrofe.
+
+## O que falta conferir
+
+- **Exame inteiro em Mac.** O servidor Mac do GitHub tem 7 GB de memória e o
+  exame inteiro não cabe nele. Em Linux o motor usou 6,3 GB; o Mac novo, com
+  16 GB ou mais, deve dar conta, mas tempo e memória só serão medidos nele.
+- **Exames reais.** Nomes de série do hospital, aparelhos, exames com contraste
+  e anatomia alterada. Tudo o que foi medido até aqui é de voluntários
+  saudáveis de um banco público.
+- **Comparação com o NeuroQuant**, se houver laudos dele dos mesmos exames.
 
 ## Decisões e porquês
 
-- **Mesmos passos da referência.** Um percentil só vale se o volume do paciente
-  for medido do mesmo jeito que os volumes da referência. Por isso o motor
-  repete o recorte de 15 mm e as opções `--fast --cpu`.
-- **Sem as notas automáticas de qualidade do SynthSeg.** Medido no exame público
-  IXI002: com as notas (`--qc`) os volumes deixam de ser idênticos aos da
-  referência (até 1,3 % de diferença no córtex) e a memória necessária estoura.
-  Ficam como opção (`--qualidade`), desligada. A conferência de qualidade é a
-  do olho: a página e a série coloridas.
+- **Mesmos passos da referência, até onde o Mac permite.** Um percentil só vale
+  se o volume do paciente for medido do mesmo jeito que os volumes da
+  referência. A referência recortou cada imagem em volta do encéfalo com o
+  programa SynthStrip. Ele não roda em Mac com Apple Silicon em tempo razoável
+  (no servidor de teste não terminou em 20 minutos nem com imagem pequena),
+  porque ali o PyTorch faz as contas em 3D por um caminho que pede dezenas de
+  GB. O motor chega à mesma caixa por outro caminho: acha a cabeça pelo
+  contorno, segmenta, e recorta de novo pelo que foi segmentado mais 15 mm.
+- **Dois passos, e não um.** Com um passo só (recorte pela cabeça), a amígdala
+  direita saiu em média 2,4 % menor e o hipocampo direito 1,0 % menor que na
+  referência. Com o segundo passo esses desvios somem. Custa o dobro do tempo.
+- **Sem as notas automáticas de qualidade do SynthSeg.** Com elas (`--qc`) os
+  volumes mudam (até 1,3 % no córtex) e a memória necessária estoura. Ficam
+  como opção (`--qualidade`), desligada. A conferência de qualidade é a do
+  olho: a página e a série coloridas.
 - **Cores diferentes para cada lado** em hipocampo, amígdala e tálamo, e letras
   D e E nas imagens: uma troca de lado tem de aparecer na imagem.
 - **Trava de orientação.** O complemento calcula a orientação do volume que
   gravou, e o motor informa a que leu do arquivo. Se as duas não baterem, nada
   é gravado no exame.
+- **Aviso de borda.** Se, no fim, o encéfalo segmentado encostar na borda da
+  imagem, o relatório avisa que parte dele pode ter ficado fora do campo de
+  visão.
 - **Recusas.** O comando não roda em TC, em série com menos de 60 cortes, em
   série com cortes faltando ou repetidos, nem em FLAIR, difusão e afins. Avisa
   quando o nome da série sugere contraste ou não é reconhecido como T1.
@@ -74,8 +148,17 @@ peças, cerca de 2,5 GB com o Python e as bibliotecas.
   os percentis são extrapolados. Não serve para crianças.
 - Entre aparelhos diferentes o resultado pode deslocar até cerca de 0,5
   desvio-padrão (estimativa do Neurodesk).
+- Nas estruturas pequenas, o enquadramento da imagem muda o volume em 1 a 3 %
+  (tabela acima).
 - É medida de um único momento: não mede perda ao longo do tempo.
 - A referência é de T1 sem contraste, com voxel de cerca de 1 mm. Acima de
   1,5 mm o relatório avisa.
 - A segmentação pode errar em anatomia muito alterada (grandes lesões, cirurgia,
   hidrocefalia acentuada). Por isso a conferência visual é parte do uso.
+
+## Como repetir as medições
+
+No GitHub, aba Actions, fluxo "Volumetria (teste real)", opção `onde`:
+`linux` (8 voluntários), `miniatura` (o recorte em Linux e Mac) ou
+`diagnostico` (tempo e memória por configuração). Os resultados ficam na
+versão `teste-volumetria` do repositório.
