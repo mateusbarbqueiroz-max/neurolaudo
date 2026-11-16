@@ -76,7 +76,9 @@ def find_tools() -> Tools:
     if missing:
         raise PipelineError("O motor de segmentação não está instalado (rode o instalador da volumetria). Falta: "
                             + "; ".join(missing))
-    env = {"FREESURFER_HOME": str(fs_home), "TF_CPP_MIN_LOG_LEVEL": "3"}
+    # Sem oneDNN o TensorFlow dá os mesmos volumes com menos memória (cerca de 6 GB contra 10 GB no exame
+    # de teste). No Mac com Apple Silicon o oneDNN nem existe; assim o Linux de teste anda pelo mesmo caminho.
+    env = {"FREESURFER_HOME": str(fs_home), "TF_CPP_MIN_LOG_LEVEL": "3", "TF_ENABLE_ONEDNN_OPTS": "0"}
     return Tools((sys.executable, str(scripts["mri_synthstrip"])), (sys.executable, str(scripts["mri_synthseg"])), env,
                  str(fs_home))
 
@@ -133,9 +135,10 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
     """Roda a volumetria de um volume T1 e grava os resultados em `out_dir`. Devolve o conteúdo de resultado.json.
 
     `series_notes`: avisos sobre a série vindos de quem chamou (por exemplo, "série com contraste").
-    `quality`: pede também as notas automáticas de qualidade do SynthSeg. Fica desligado por padrão: a rede
-    que dá as notas trabalha em 224³ voxels com filtros de 5×5×5 e multiplica a memória necessária (no
-    servidor de teste, sem as otimizações oneDNN, a segmentação parou por falta de memória só por causa dela).
+    `quality`: pede também as notas automáticas de qualidade do SynthSeg. Fica desligado por padrão por dois
+    motivos medidos no exame público IXI002: com as notas, os volumes deixam de ser idênticos aos da tabela que
+    ajustou as normas (até 1,3 % de diferença no córtex), e a memória necessária estoura (a rede das notas
+    trabalha em 224³ voxels com filtros de 5×5×5).
     """
     say = progress or (lambda fraction, message: None)
     started = time.monotonic()
