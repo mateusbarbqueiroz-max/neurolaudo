@@ -1,14 +1,18 @@
 """Volumetria de um exame, do volume T1 ao relatório.
 
-Passos, iguais aos usados para ajustar as normas (Neurodesk, BRAINQUANT_NORMS.md):
+Passos:
 
-1. `mri_synthstrip`: máscara do encéfalo;
-2. recorte na caixa da máscara mais 15 mm;
-3. `mri_synthseg --fast --cpu --vol`: segmentação e volumes (SynthSeg 2.0);
-4. comparação com a referência por idade e sexo;
-5. relatório, página de conferência e mapa colorido.
+1. recorte da imagem na caixa da cabeça (`volume.head_box`);
+2. `mri_synthseg --fast --cpu --vol`: segmentação e volumes (SynthSeg 2.0), como nas normas;
+3. comparação com a referência por idade e sexo (Neurodesk, BRAINQUANT_NORMS.md);
+4. relatório, página de conferência e mapa colorido.
 
-Os dois programas vêm do FreeSurfer 8.2.0 e não fazem parte deste repositório.
+As normas foram ajustadas com o recorte feito em volta do encéfalo pelo SynthStrip. Com ele o motor
+reproduziu os volumes publicados com diferença de 0,00 % em 8 voluntários públicos (16/11/2026), mas o
+SynthStrip não roda em Mac com Apple Silicon em tempo razoável, e foi trocado pela caixa da cabeça. O
+efeito da troca é medido por scripts/validate_ixi.py.
+
+O `mri_synthseg` vem do FreeSurfer 8.2.0 e não faz parte deste repositório.
 Uso em pesquisa. Não validado para diagnóstico.
 """
 from __future__ import annotations
@@ -33,9 +37,8 @@ from neurolaudo.volumetry.tables import QC_TITLES_PT, read_volumes_csv, result_j
 QC_THRESHOLD = 0.65          # abaixo disso os autores do SynthSeg tratam a segmentação como suspeita
 MAX_VOXEL_MM = 1.5           # acima disso a série não é um T1 volumétrico fino
 PAGE_DPI = 150
-STRIP_TIMEOUT_S = 20 * 60
 SEGMENT_TIMEOUT_S = 40 * 60
-MODEL_FILES = ("synthseg_2.0.h5", "synthseg_qc_2.0.h5", "synthstrip.1.pt")
+MODEL_FILES = ("synthseg_2.0.h5", "synthseg_qc_2.0.h5")
 
 Progress = Callable[[float, str], None]
 
@@ -46,9 +49,8 @@ class PipelineError(RuntimeError):
 
 @dataclass(frozen=True)
 class Tools:
-    """Como chamar os dois programas de segmentação."""
+    """Como chamar o programa de segmentação."""
 
-    synthstrip: tuple[str, ...]
     synthseg: tuple[str, ...]
     env: Mapping[str, str] = field(default_factory=dict)
     home: str = ""
@@ -65,13 +67,13 @@ def engine_home() -> Path:
 
 
 def find_tools() -> Tools:
-    """Localiza os programas. Variáveis NEUROLAUDO_SYNTHSTRIP e NEUROLAUDO_SYNTHSEG trocam os comandos."""
-    strip_cmd, seg_cmd = os.environ.get("NEUROLAUDO_SYNTHSTRIP"), os.environ.get("NEUROLAUDO_SYNTHSEG")
-    if strip_cmd and seg_cmd:
-        return Tools(tuple(shlex.split(strip_cmd)), tuple(shlex.split(seg_cmd)))
+    """Localiza o programa de segmentação. A variável NEUROLAUDO_SYNTHSEG troca o comando (testes)."""
+    seg_cmd = os.environ.get("NEUROLAUDO_SYNTHSEG")
+    if seg_cmd:
+        return Tools(tuple(shlex.split(seg_cmd)))
     fs_home = Path(os.environ.get("NEUROLAUDO_FS_HOME") or engine_home() / "freesurfer")
-    scripts = {name: fs_home / "bin" / name for name in ("mri_synthstrip", "mri_synthseg")}
-    missing = [str(p) for p in scripts.values() if not p.is_file()]
+    script = fs_home / "bin" / "mri_synthseg"
+    missing = [str(script)] if not script.is_file() else []
     missing += [str(fs_home / "models" / m) for m in MODEL_FILES if not (fs_home / "models" / m).is_file()]
     if missing:
         raise PipelineError("O motor de segmentação não está instalado (rode o instalador da volumetria). Falta: "
@@ -79,8 +81,7 @@ def find_tools() -> Tools:
     # Sem oneDNN o TensorFlow dá os mesmos volumes com menos memória (cerca de 6 GB contra 10 GB no exame
     # de teste). No Mac com Apple Silicon o oneDNN nem existe; assim o Linux de teste anda pelo mesmo caminho.
     env = {"FREESURFER_HOME": str(fs_home), "TF_CPP_MIN_LOG_LEVEL": "3", "TF_ENABLE_ONEDNN_OPTS": "0"}
-    return Tools((sys.executable, str(scripts["mri_synthstrip"])), (sys.executable, str(scripts["mri_synthseg"])), env,
-                 str(fs_home))
+    return Tools((sys.executable, str(script)), env, str(fs_home))
 
 
 def _run(command, env: Mapping[str, str], log_path: Path, what: str, timeout: int) -> None:
@@ -158,20 +159,15 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
     source = work / "t1.nii.gz"
     nib.save(image, str(source))
 
-    say(0.05, "Localizando o encéfalo")
-    mask_path = work / "mascara.nii.gz"
-    _run([*tools.synthstrip, "-i", str(source), "-m", str(mask_path), "-t", str(threads)], tools.env,
-         work / "registro-synthstrip.txt", "A localização do encéfalo (SynthStrip)", STRIP_TIMEOUT_S)
-    if not mask_path.is_file():
-        raise PipelineError("A localização do encéfalo terminou sem gravar a máscara.")
+    say(0.05, "Localizando a cabeça")
     try:
-        trimmed, box = volume.trim_to_mask(image, nib.load(str(mask_path)))
+        trimmed, box = volume.trim_to_head(image)
     except volume.VolumeError as error:
         raise PipelineError(str(error)) from error
     trimmed_path = work / "t1_recortado.nii.gz"
     nib.save(trimmed, str(trimmed_path))
 
-    say(0.20, "Segmentando (alguns minutos)")
+    say(0.10, "Segmentando (alguns minutos)")
     seg_path, vol_path, qc_path = work / "segmentacao.nii.gz", work / "volumes.csv", work / "qualidade.csv"
     for stale in (seg_path, vol_path, qc_path):
         stale.unlink(missing_ok=True)   # o SynthSeg acrescenta linhas a tabelas que já existem

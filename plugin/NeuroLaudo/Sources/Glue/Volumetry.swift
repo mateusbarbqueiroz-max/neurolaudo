@@ -32,6 +32,8 @@ struct VolumetryJob: Sendable {
     var sourceSOPInstanceUID: String?
     /// Geometria dos cortes, na ordem em que foram gravados no volume.
     var geometries: [IsiXImageGeometry]
+    /// Para cada corte do volume, o número que ele tem na série original.
+    var order: [Int]
     var columns: Int
     var rows: Int
     /// Sentido dos índices do volume, por exemplo "PIR". O motor tem de ler o mesmo do arquivo.
@@ -246,7 +248,8 @@ enum Volumetry {
                                output: folder.appendingPathComponent("saida"),
                                progressFile: folder.appendingPathComponent("andamento.txt"),
                                studyInstanceUID: studyUID, sourceSOPInstanceUID: nil,
-                               geometries: grid.order.map { geometries[$0] }, columns: grid.columns, rows: grid.rows,
+                               geometries: grid.order.map { geometries[$0] }, order: grid.order,
+                               columns: grid.columns, rows: grid.rows,
                                orientation: grid.orientationCode)
         do {
             FileManager.default.createFile(atPath: job.nifti.path, contents: nil)
@@ -305,17 +308,23 @@ enum Volumetry {
         guard mapData.count == sliceBytes * job.geometries.count else {
             throw PluginFailure("O mapa devolvido pelo motor está incompleto. Nada foi gravado no exame.")
         }
-        var slices: [IsiXPixelData] = []
-        slices.reserveCapacity(job.geometries.count)
+        // O mapa vai para o exame na ordem da série original, para o corte n do mapa ser o corte n do T1.
+        var slices = [IsiXPixelData?](repeating: nil, count: job.geometries.count)
+        var geometries = job.geometries
         for k in 0..<job.geometries.count {
             let start = mapData.startIndex + k * sliceBytes
             let samples = [UInt8](mapData[start..<start + sliceBytes])
-            slices.append(.rgba8(try IsiXPixelBuffer(width: job.columns, height: job.rows, channels: 4, samples: samples)))
+            let original = job.order.indices.contains(k) ? job.order[k] : k
+            guard slices.indices.contains(original) else {
+                throw PluginFailure("A ordem dos cortes da série não fecha com o mapa. Nada foi gravado no exame.")
+            }
+            slices[original] = .rgba8(try IsiXPixelBuffer(width: job.columns, height: job.rows, channels: 4, samples: samples))
+            geometries[original] = job.geometries[k]
         }
         var map = IsiXDerivedSeriesRequest(studyInstanceUID: job.studyInstanceUID, seriesDescription: mapSeriesName,
-                                           images: slices)
+                                           images: slices.compactMap { $0 })
         map.sourceSOPInstanceUID = job.sourceSOPInstanceUID
-        map.geometries = job.geometries
+        map.geometries = geometries
         return (report, map)
     }
 

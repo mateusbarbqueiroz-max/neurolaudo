@@ -47,10 +47,8 @@ def main(argv: list[str]) -> int:
     published = read_volumes_csv(reference_csv, subject)
 
     image = volume.load_image(t1)
-    mask_path, trimmed_path = out / "mascara.nii.gz", out / "t1_recortado.nii.gz"
-    subprocess.run([*tools.synthstrip, "-i", t1, "-m", str(mask_path)], env=env, check=True, stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
-    trimmed, box = volume.trim_to_mask(image, nib.load(str(mask_path)))
+    trimmed_path = out / "t1_recortado.nii.gz"
+    trimmed, box = volume.trim_to_head(image)
     nib.save(trimmed, str(trimmed_path))
     print(f"Imagem {image.shape}, voxel {volume.voxel_sizes(image)}, recorte {box.low} a {box.high} = {box.shape}", flush=True)
 

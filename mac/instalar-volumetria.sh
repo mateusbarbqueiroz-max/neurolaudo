@@ -2,12 +2,12 @@
 # Instala o motor de volumetria do NeuroLaudo (uso em pesquisa, não validado para diagnóstico).
 #
 # Põe tudo em uma pasta só, sem mexer no resto do computador e sem precisar de Xcode:
-#   - um Python próprio (3.11) com TensorFlow 2.13.1 e PyTorch 2.0.1;
-#   - os programas mri_synthseg e mri_synthstrip do FreeSurfer 8.2.0 e os modelos
-#     treinados deles, baixados dos endereços oficiais do FreeSurfer e conferidos
-#     por soma SHA-256 (não é a instalação completa do FreeSurfer, de 20 GB);
+#   - um Python próprio (3.11) com TensorFlow 2.13.1;
+#   - o programa mri_synthseg do FreeSurfer 8.2.0 e os modelos treinados dele,
+#     baixados dos endereços oficiais do FreeSurfer e conferidos por soma SHA-256
+#     (não é a instalação completa do FreeSurfer, de 20 GB);
 #   - o motor do NeuroLaudo.
-# Ocupa cerca de 2,5 GB. Para remover, apague a pasta mostrada no fim.
+# Ocupa cerca de 2 GB. Para remover, apague a pasta mostrada no fim.
 #
 # Uso:  bash <(curl -fsSL https://raw.githubusercontent.com/mateusbarbqueiroz-max/neurolaudo/main/mac/instalar-volumetria.sh)
 #
@@ -69,17 +69,10 @@ if [ ! -x "$PY" ]; then
   "$UV" venv --quiet --python-preference only-managed --python 3.11 "$MOTOR/venv"
 fi
 
-echo "2/5  Bibliotecas de cálculo (cerca de 400 MB para baixar)"
+echo "2/5  Bibliotecas de cálculo (cerca de 300 MB para baixar)"
 PACOTES="numpy==1.24.3 tensorflow==2.13.1 scipy==1.10.1 h5py==3.9.0 nibabel==5.2.1 matplotlib==3.7.5 pydicom>=2.4,<4"
-if [ "$(uname -s)" = "Linux" ]; then
-  # Em Linux o PyTorch sem placa de vídeo vem do índice do próprio PyTorch.
-  # shellcheck disable=SC2086
-  "$UV" pip install --quiet --python "$PY" --extra-index-url https://download.pytorch.org/whl/cpu \
-    --index-strategy unsafe-best-match $PACOTES "torch==2.0.1+cpu"
-else
-  # shellcheck disable=SC2086
-  "$UV" pip install --quiet --python "$PY" $PACOTES "torch==2.0.1"
-fi
+# shellcheck disable=SC2086
+"$UV" pip install --quiet --python "$PY" $PACOTES
 
 echo "3/5  Biblioteca surfa, do FreeSurfer"
 if [ -n "${NEUROLAUDO_SURFA:-}" ]; then
@@ -94,9 +87,8 @@ else
   "$UV" pip install --quiet --python "$PY" "surfa==0.6.3"
 fi
 
-echo "4/5  Programas e modelos de segmentação do FreeSurfer 8.2.0 (cerca de 135 MB)"
+echo "4/5  Programa e modelos de segmentação do FreeSurfer 8.2.0 (cerca de 100 MB)"
 baixar "$FS_RAW/mri_synthseg/mri_synthseg" "$FS/bin/mri_synthseg" f3c182cd100721e8ae4ae4e0661b6ac3c45e80453f716d668d53ca0fe189279b
-baixar "$FS_RAW/mri_synthstrip/mri_synthstrip" "$FS/bin/mri_synthstrip" bbc2ff8f8779862039401b05d5cd6039fb4f3583e0032a793ac9adb3f4521590
 while read -r SOMA NOME; do
   baixar "$FS_RAW/mri_synthseg/$NOME" "$FS/models/$NOME" "$SOMA"
 done <<'LISTA'
@@ -116,7 +108,6 @@ while read -r PASTA SOMA TAMANHO SUFIXO NOME; do
 done <<'LISTA'
 bee/241 f190bfd742f450ef3ca2c9df9ed4d2e0232b3a74471da5e51b7770bacdf80c3e 53079152 .0.h5 synthseg_2.0.h5
 3ac/fe4 fb92e37daa0842bdd8a03bc06a3b36b0d38810e31c714659cedd09119c0abfb7 49878004 .0.h5 synthseg_qc_2.0.h5
-fdd/51c 37417f802196186441aae3e7f385d94f8a98c64a88acaeaa2723af995c653e33 30851709 .1.pt synthstrip.1.pt
 LISTA
 
 echo "5/5  Motor do NeuroLaudo"
@@ -129,10 +120,9 @@ fi
 rm -rf "$UV_CACHE_DIR"
 
 echo "Conferindo a instalação"
-# Um processo para cada biblioteca: TensorFlow e PyTorch juntos no mesmo processo se atrapalham,
-# e o motor também os usa em processos separados.
-TF_CPP_MIN_LOG_LEVEL=3 "$PY" -c "import tensorflow, numpy; print('  TensorFlow', tensorflow.__version__, '· numpy', numpy.__version__)"
-"$PY" -c "import torch, surfa, nibabel; print('  PyTorch', torch.__version__, '· surfa', surfa.__version__, '· nibabel', nibabel.__version__)"
+TF_CPP_MIN_LOG_LEVEL=3 "$PY" -c "import tensorflow, numpy, surfa, nibabel; print('  TensorFlow', tensorflow.__version__, '· numpy', numpy.__version__, '· surfa', surfa.__version__, '· nibabel', nibabel.__version__)"
+# Restos de instalações anteriores, que usavam o SynthStrip.
+rm -f "$FS/bin/mri_synthstrip" "$FS/models/synthstrip.1.pt"
 NEUROLAUDO_MOTOR="$MOTOR" "$PY" -m neurolaudo.volumetry.cli verificar
 
 echo

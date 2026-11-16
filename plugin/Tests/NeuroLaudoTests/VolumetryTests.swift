@@ -168,7 +168,7 @@ final class VolumetryTests: XCTestCase {
             let harness = try Harness()
             harness.loadPatient()
             harness.plugin.engine = engine
-            let viewer = try harness.addT1Viewer()
+            let viewer = try harness.addT1Viewer(reversed: true)     // série da direita para a esquerda
             return (harness, try harness.plugin.startVolumetry(in: viewer, context: harness.context))
         }
         try await task.value()
@@ -183,12 +183,16 @@ final class VolumetryTests: XCTestCase {
             XCTAssertEqual(map.seriesDescription, Volumetry.mapSeriesName)
             XCTAssertEqual(map.images.count, 64)
             XCTAssertEqual(map.geometries?.count, 64)
-            XCTAssertEqual(map.geometries?.first?.imagePosition.x, 40)
             XCTAssertNotNil(map.sourceSOPInstanceUID)
-            // O corte k do mapa fica na geometria do corte k do volume.
-            guard case .rgba8(let last) = map.images[63] else { return XCTFail("mapa sem cor") }
-            XCTAssertEqual(last[0, 0, 0], 63)
-            XCTAssertEqual(map.geometries?[63].imagePosition.x, 40 - 63)
+            // O mapa segue a ordem da série original: o primeiro corte da série é o mais à direita (x = 40 - 63),
+            // que no volume é o último (o motor de mentira pinta em cada corte o seu número no volume).
+            guard case .rgba8(let first) = map.images[0], case .rgba8(let last) = map.images[63] else {
+                return XCTFail("mapa sem cor")
+            }
+            XCTAssertEqual(first[0, 0, 0], 63)
+            XCTAssertEqual(map.geometries?[0].imagePosition.x, 40 - 63)
+            XCTAssertEqual(last[0, 0, 0], 0)
+            XCTAssertEqual(map.geometries?[63].imagePosition.x, 40)
 
             // As duas séries entraram no exame, o mapa abriu e o resumo foi mostrado.
             let names = database.stubSeries.map { $0.seriesDescription ?? "" }
@@ -261,7 +265,8 @@ final class VolumetryTests: XCTestCase {
                                 header: folder.appendingPathComponent("cabecalho.json"),
                                 output: folder.appendingPathComponent("saida"),
                                 progressFile: folder.appendingPathComponent("andamento.txt"),
-                                studyInstanceUID: "study-1", sourceSOPInstanceUID: nil, geometries: [], columns: 1, rows: 1,
+                                studyInstanceUID: "study-1", sourceSOPInstanceUID: nil, geometries: [], order: [],
+                                columns: 1, rows: 1,
                                 orientation: "PIR")
         }
         // Os argumentos chegam como o motor espera: ... --saida S --cabecalho C --progresso P

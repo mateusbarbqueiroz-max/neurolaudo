@@ -82,8 +82,7 @@ def run_check_command(args: argparse.Namespace) -> int:
 
     tools = find_tools()
     print(f"Motor de segmentação encontrado{' em ' + tools.home if tools.home else ''}.")
-    print("SynthStrip: " + " ".join(tools.synthstrip))
-    print("SynthSeg:   " + " ".join(tools.synthseg))
+    print("SynthSeg: " + " ".join(tools.synthseg))
     return 0
 
 

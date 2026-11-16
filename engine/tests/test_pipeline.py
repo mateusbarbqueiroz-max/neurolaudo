@@ -1,4 +1,4 @@
-"""Volumetria de ponta a ponta com programas de mentira no lugar do SynthStrip e do SynthSeg.
+"""Volumetria de ponta a ponta com um programa de mentira no lugar do SynthSeg.
 
 Confere o encanamento (recorte, tabelas, relatório, mapa), não a segmentação.
 A segmentação de verdade é testada no GitHub (.github/workflows/volumetria.yml).
@@ -46,7 +46,7 @@ def make_t1(path, shape=(72, 88, 64)):
 
 @pytest.fixture()
 def fake_tools(tmp_path, monkeypatch):
-    strip, seg = os.path.join(FAKES, "fake_synthstrip.py"), os.path.join(FAKES, "fake_synthseg.py")
+    seg = os.path.join(FAKES, "fake_synthseg.py")
     volumes = tmp_path / "volumes.csv"
     with open(IXI_CSV, newline="", encoding="utf-8") as fh:
         row = next(r for r in csv.DictReader(fh) if r["subject"] == SUBJECT)
@@ -56,7 +56,6 @@ def fake_tools(tmp_path, monkeypatch):
         writer.writerow(columns)
         writer.writerow([row[c] for c in columns])
     monkeypatch.setenv("FAKE_VOLUMES", str(volumes))
-    monkeypatch.setenv("NEUROLAUDO_SYNTHSTRIP", f"{sys.executable} {strip}")
     monkeypatch.setenv("NEUROLAUDO_SYNTHSEG", f"{sys.executable} {seg}")
     return tmp_path
 
@@ -75,12 +74,12 @@ def test_exam_from_volume_to_report_and_map(fake_tools, tmp_path):
     assert (out / "relatorio.pdf").read_bytes().startswith(b"%PDF")
     assert (out / "relatorio.png").exists() and (out / "conferencia.png").exists()
 
-    # O recorte tira o ar em volta e guarda a margem de 15 mm.
+    # O recorte tira ar em volta, sem cortar nada do que é cabeça.
     low, high = result["recorte"]["inicio"], result["recorte"]["fim"]
     occupied = np.argwhere(data > 50)
-    assert [h - l for l, h in zip(low, high)] < list(data.shape)
-    assert low == [max(int(v) - 15, 0) for v in occupied.min(0)]
-    assert high == [min(int(v) + 16, n) for v, n in zip(occupied.max(0), data.shape)]
+    assert all(l <= int(v) for l, v in zip(low, occupied.min(0)))
+    assert all(h > int(v) for h, v in zip(high, occupied.max(0)))
+    assert np.prod([h - l for l, h in zip(low, high)]) < 0.8 * data.size
 
     # As páginas e o mapa têm o tamanho que o resultado declara.
     for page in result["paginas"]:
@@ -121,7 +120,7 @@ def test_segmenter_failure_is_reported_with_its_log(fake_tools, tmp_path, monkey
 
 
 def test_missing_engine_is_explained(tmp_path, monkeypatch):
-    for name in ("NEUROLAUDO_SYNTHSTRIP", "NEUROLAUDO_SYNTHSEG", "NEUROLAUDO_FS_HOME"):
+    for name in ("NEUROLAUDO_SYNTHSEG", "NEUROLAUDO_FS_HOME"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("NEUROLAUDO_MOTOR", str(tmp_path / "vazio"))
     with pytest.raises(pipeline.PipelineError) as error:
@@ -156,11 +155,46 @@ def test_volume_checks(tmp_path):
     nib.save(nib.Nifti1Image(np.zeros((64, 64, 4), dtype=np.float32), np.eye(4)), str(flat))
     with pytest.raises(volume.VolumeError):
         volume.load_image(str(flat))
-    with pytest.raises(volume.VolumeError):
-        volume.trim_box(np.zeros((20, 20, 20)), (1.0, 1.0, 1.0))
-    box = volume.trim_box(np.pad(np.ones((4, 4, 4)), 30), (1.0, 2.0, 0.5), margin_mm=10)
-    assert box.low == (20, 25, 10) and box.high == (44, 39, 54)
     assert pipeline.resolution_notes((1.0, 1.0, 5.0)) and not pipeline.resolution_notes((1.0, 1.0, 1.2))
+
+
+def synthetic_head(affine, shape):
+    """Cabeça de mentira em coordenadas do paciente (RAS, mm): topo em z = 115, pescoço, nariz e um ponto solto acima."""
+    i, j, k = np.meshgrid(*[np.arange(n, dtype=np.float32) for n in shape], indexing="ij", sparse=True)
+    x, y, z = (affine[r, 0] * i + affine[r, 1] * j + affine[r, 2] * k + affine[r, 3] for r in range(3))
+    data = np.random.default_rng(0).normal(4, 2, shape).astype(np.float32)              # ruído do ar
+    skull = (x / 80) ** 2 + ((y - 5) / 100) ** 2 + ((z - 20) / 95) ** 2 <= 1
+    neck = (x ** 2 + (y - 20) ** 2 <= 55 ** 2) & (z < -40)
+    nose = (np.abs(x) < 15) & (y > 100) & (y < 128) & (z > -40) & (z < 0)
+    data[skull | neck | nose] = 120
+    data[(np.abs(x - 60) < 3) & (np.abs(y) < 3) & (np.abs(z - 128) < 3)] = 300          # artefato acima da cabeça
+    return nib.Nifti1Image(data, affine)
+
+
+@pytest.mark.parametrize("affine, shape", [
+    (np.array([[1, 0, 0, -120.0], [0, 1, 0, -125.0], [0, 0, 2, -140.0], [0, 0, 0, 1]]), (240, 256, 140)),     # axial
+    (np.array([[0, 0, 1.2, -110.0], [-1, 0, 0, 130.0], [0, -1, 0, 135.0], [0, 0, 0, 1]]), (256, 280, 190)),   # sagital
+])
+def test_head_box_runs_from_the_scalp_top_down_18_cm(affine, shape):
+    image = synthetic_head(affine, shape)
+    box = volume.head_box(image)
+    corners = np.array([affine @ np.array([*box.low, 1.0]), affine @ np.array([v - 1 for v in box.high] + [1.0])])[:, :3]
+    low, high = corners.min(0), corners.max(0)
+    # Em cima: o topo da cabeça (115 mm) mais a folga; o artefato a 128 mm não conta. Embaixo: 18 cm abaixo do topo.
+    assert 116 <= high[2] <= 124 and -70 <= low[2] <= -60
+    # Dos lados e atrás: a cabeça mais a folga. Na frente: até o nariz (128 mm), ou até onde a imagem vai.
+    assert -92 <= low[0] <= -81 and 81 <= high[0] <= 92
+    assert -108 <= low[1] <= -96 and high[1] >= 127
+    trimmed, same = volume.trim_to_head(image)
+    assert same == box and trimmed.shape == box.shape
+
+
+def test_head_box_refuses_an_image_without_a_head():
+    with pytest.raises(volume.VolumeError):
+        volume.head_box(nib.Nifti1Image(np.zeros((64, 64, 64), dtype=np.float32), np.eye(4)))
+    noise = np.random.default_rng(1).normal(100, 1, (64, 64, 64)).astype(np.float32)
+    box = volume.head_box(nib.Nifti1Image(noise, np.eye(4)))     # imagem toda "cheia": a caixa é a imagem
+    assert box.low == (0, 0, 0)
 
 
 def test_screen_convention_puts_patient_right_on_the_left():
@@ -183,7 +217,7 @@ def test_fake_engine_folder_and_t1_phantom_work_together(tmp_path, monkeypatch):
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
     import make_phantom
 
-    for name in ("NEUROLAUDO_SYNTHSTRIP", "NEUROLAUDO_SYNTHSEG", "NEUROLAUDO_FS_HOME", "FAKE_VOLUMES"):
+    for name in ("NEUROLAUDO_SYNTHSEG", "NEUROLAUDO_FS_HOME", "FAKE_VOLUMES"):
         monkeypatch.delenv(name, raising=False)
     home = tmp_path / "motor"
     subprocess.run([sys.executable, os.path.join(FAKES, "make_fake_engine.py"), str(home)], check=True, capture_output=True)

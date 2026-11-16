@@ -1,9 +1,9 @@
-"""Monta uma pasta de "motor" com os programas de mentira, para testar o complemento dentro do IsiX.
+"""Monta uma pasta de "motor" com o segmentador de mentira, para testar o complemento dentro do IsiX.
 
 Uso: python make_fake_engine.py PASTA_DO_MOTOR
 
 A pasta fica com a mesma forma da que o instalador cria (freesurfer/bin, freesurfer/models), mas
-com os programas de mentira e modelos vazios. O Python (venv) é criado por quem chama.
+com o segmentador de mentira e modelos vazios. O Python (venv) é criado por quem chama.
 """
 import csv
 import shutil
@@ -14,9 +14,8 @@ here = Path(__file__).parent
 home = Path(sys.argv[1]) / "freesurfer"
 (home / "bin").mkdir(parents=True, exist_ok=True)
 (home / "models").mkdir(parents=True, exist_ok=True)
-shutil.copy(here / "fake_synthstrip.py", home / "bin" / "mri_synthstrip")
 shutil.copy(here / "fake_synthseg.py", home / "bin" / "mri_synthseg")
-for model in ("synthseg_2.0.h5", "synthseg_qc_2.0.h5", "synthstrip.1.pt"):
+for model in ("synthseg_2.0.h5", "synthseg_qc_2.0.h5"):
     (home / "models" / model).write_bytes(b"")
 
 # Volumes de um voluntário público, só para o relatório ter números plausíveis.
