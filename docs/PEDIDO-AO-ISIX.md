@@ -1,45 +1,58 @@
 # Pedido ao autor do IsiX DICOM Viewer
 
-Texto pronto para você enviar em
-<https://github.com/ThalesMMS/IsiX-DICOM-Viewer-macOS/issues/new>.
-Eu não consigo abrir pedidos em repositórios de outras pessoas a partir desta
-sessão. O autor publica versões quase todo dia; se ele atender, o botão do PACS
-passa a funcionar sem depender do nosso complemento.
+Situação em 16/11/2026: **ainda não enviado.** A sessão do Claude não consegue
+abrir pedidos no repositório do autor (só age em repositórios onde o usuário
+pode gravar). O envio fica com o usuário.
 
-Pode colar como está. Não há dado de paciente nem nome de servidor no texto.
+## Como enviar
 
----
+1. Abra <https://github.com/ThalesMMS/IsiX-DICOM-Viewer-macOS/issues/new>,
+   já conectado à sua conta do GitHub.
+2. Cole o título e o texto abaixo. Estão em inglês, que é a língua do repositório.
+3. Clique em **Create** (ou **Submit new issue**).
+4. Me passe o endereço do pedido criado, para eu acompanhar a resposta.
 
-**Título:** Links `osirix://` do OsiriX MD: `then=Open`, `retrieveOnlyIfNeeded` e parâmetros com maiúsculas
+Não há dado de paciente nem nome de servidor no texto.
 
-Olá, Thales. Obrigado pelo IsiX.
+## Título
 
-O botão "abrir no OsiriX" do PACS do meu hospital gera este link (valores trocados por XXX):
+```
+osirix:// links written for OsiriX MD: then=Open, retrieveOnlyIfNeeded and parameter name case
+```
+
+## Texto
+
+````
+Hello, and thank you for IsiX.
+
+The "open in OsiriX" button of my hospital's PACS generates this link (values replaced by XXX):
 
 ```
 osirix://?methodName=Retrieve&retrieveOnlyIfNeeded=yes&ServerName=XXX&filterKey=StudyInstanceUID&filterValue=XXX&then=Open
 ```
 
-No OsiriX MD ele busca o exame no servidor e o abre. Lendo o código da versão 6.0.3
-(`Horos/Sources/XMLRPCInterface+Retrieve.swift` e `HorosSchemeURL.swift`), o IsiX
-aceita o `Retrieve` por `StudyInstanceUID`, mas:
+In OsiriX MD it retrieves the study from the DICOM node and opens it. Reading the 6.0.3 source (`Horos/Sources/XMLRPCInterface+Retrieve.swift`, `Horos/Sources/HorosSchemeURL.swift`), IsiX accepts `Retrieve` by `StudyInstanceUID`, but:
 
-1. **`then=Open` é ignorado.** O exame chega ao banco e não abre.
-2. **`retrieveOnlyIfNeeded=yes` é ignorado.** O exame é buscado de novo mesmo quando já está no banco.
-3. **Os nomes dos parâmetros diferenciam maiúsculas.** `Retrieve` lê `serverName`; um link
-   com `ServerName` é recusado com "server name is empty".
+1. `then=Open` is ignored: the study arrives in the database and is not opened.
+2. `retrieveOnlyIfNeeded=yes` is ignored: the study is retrieved again even when it is already in the database.
+3. Parameter names are case-sensitive: `Retrieve` reads `serverName`, so a link with `ServerName` would fail with "server name is empty". I am still confirming the exact spelling my PACS uses.
 
-Seria possível dar suporte a esses três pontos, para que links escritos para o
-OsiriX MD funcionem sem alteração?
+Would you consider supporting these, so that links written for OsiriX MD work unchanged?
 
-**Um segundo ponto, de segurança.** O README diz que, por padrão, o servidor XML-RPC
-atende só este Mac. Em uma instalação nova da 6.0.3 (macOS 27), ao ligar o suporte a
-URL, o registro mostrou:
+I have not tested this against the hospital PACS yet (no compatible Mac at hand); the above comes from reading the code. I am happy to test a build when I can.
 
-```
---- XML-RPC interface activated on port: 8080 (HTTP), answering this Mac and any address, WITHOUT a password
-```
+Separately, I have a security-related observation about the XML-RPC defaults that I would rather share privately. Is there a contact you prefer for that?
 
-O valor registrado de `httpXMLRPCServerAccessScope` em `NetworkPreferences.swift` é `2`
-(qualquer endereço). Como `FindObject` devolve nomes e identificadores de pacientes,
-talvez o padrão devesse ser `0` (só este Mac), como o README descreve.
+This report was prepared with the help of an AI assistant (Claude).
+````
+
+## O ponto de segurança
+
+A observação sobre a porta de comandos (`docs/FATOS-ISIX.md`, seção "Porta de
+comandos") não vai no pedido público: o costume é avisar o autor em particular.
+O repositório dele não tem canal de aviso privado nem política de segurança,
+por isso o pedido acima pergunta por um contato. Quando ele responder, o Claude
+entrega o texto do aviso para envio.
+
+Enquanto isso, o guia de instalação já traz o ajuste que protege o seu Mac
+(Passo 5: atender só este Mac).

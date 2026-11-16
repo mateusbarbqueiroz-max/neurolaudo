@@ -17,7 +17,8 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Pendência | Quando | Importância |
 | --- | --- | --- |
 | Conferir se o link do botão do PACS traz `ServerName` ou `serverName` | Quando puder ver o código da página do PACS | Alta: com S maiúsculo o IsiX recusa o pedido |
-| Enviar ao autor do IsiX o texto de `docs/PEDIDO-AO-ISIX.md` | Quando puder | Alta: resolve na origem o `then=Open`, o `ServerName` e a porta de comandos aberta |
+| Enviar ao autor do IsiX o pedido de `docs/PEDIDO-AO-ISIX.md` (o Claude tentou em 16/11 e a conexão do GitHub não permite) e passar ao Claude o endereço do pedido criado | Quando puder; leva dois minutos | Alta: resolve na origem o `then=Open` e o `ServerName` |
+| Quando o autor indicar um contato, enviar em particular o aviso sobre a porta de comandos (o Claude entrega o texto) | Depois da resposta do autor | Alta: é um ponto de segurança, não vai em pedido público |
 | Instalar o IsiX e o complemento e testar o botão do PACS, seguindo `docs/GUIA-INSTALACAO.md` | Quando houver um Mac com macOS 15+ (amigo ou Mac novo) | Alta: é o teste da Etapa 1 |
 | Testar as medidas desenhando linhas em um exame (Evans, linha média, ABC/2) e o painel do ASPECTS | Junto com o item acima | Alta: só foram testadas fora do IsiX |
 | Enviar os nomes das séries dos exames de rotina (RM de encéfalo e TC de crânio) | Quando puder; dá para ver no OsiriX MD atual | Média: ajusta os protocolos de exibição ao serviço |
