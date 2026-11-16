@@ -25,16 +25,21 @@ from neurolaudo.volumetry.tables import read_volumes_csv
 
 # nome, opções extras do mri_synthseg, variáveis de ambiente extras
 NO_DNN = {"TF_ENABLE_ONEDNN_OPTS": "0"}   # o TensorFlow do Mac com Apple Silicon não tem oneDNN
+DNN = {"TF_ENABLE_ONEDNN_OPTS": "1"}
+# nome, opções extras do mri_synthseg, variáveis de ambiente extras
 CONFIGS = [
-    ("A normas: --fast --cpu, 1 núcleo", [], {}),
-    ("G  A sem oneDNN", [], NO_DNN),
-    ("H  G com 4 núcleos", ["--threads", "4"], NO_DNN),
-    ("I  H com --keepgeom", ["--threads", "4", "--keepgeom"], NO_DNN),
-    ("B  A com 4 núcleos", ["--threads", "4"], {}),
-    ("C  B com notas de qualidade", ["--threads", "4", "--qc", "QC"], {}),
-    ("D  C com --keepgeom (motor atual)", ["--threads", "4", "--qc", "QC", "--keepgeom"], {}),
-    ("E  D sem oneDNN", ["--threads", "4", "--qc", "QC", "--keepgeom"], NO_DNN),
+    ("I  sem oneDNN, 4 núcleos (motor)", ["--threads", "4", "--keepgeom"], NO_DNN),
+    ("J  sem oneDNN, 1 núcleo", ["--keepgeom"], NO_DNN),
+    ("K  com oneDNN, 4 núcleos", ["--threads", "4", "--keepgeom"], DNN),
 ]
+# Caixa que o SynthStrip deu para o IXI002 (máscara mais 15 mm), medida em 16/11/2026: serve de comparação.
+REFERENCE_BOX = ((47, 38, 2), (253, 227, 147))
+
+
+def padded(shape, zooms) -> str:
+    """Tamanho que o SynthSeg processa: reamostrado para 1 mm e completado até múltiplos de 32."""
+    sizes = [int(-(-round(n * z) // 32) * 32) for n, z in zip(shape, zooms)]
+    return f"{sizes[0]} x {sizes[1]} x {sizes[2]} = {sizes[0] * sizes[1] * sizes[2] / 1e6:.1f} milhões de voxels"
 
 
 def main(argv: list[str]) -> int:
@@ -47,10 +52,19 @@ def main(argv: list[str]) -> int:
     published = read_volumes_csv(reference_csv, subject)
 
     image = volume.load_image(t1)
+    zooms = volume.voxel_sizes(image)
     trimmed_path = out / "t1_recortado.nii.gz"
-    trimmed, box = volume.trim_to_head(image)
-    nib.save(trimmed, str(trimmed_path))
-    print(f"Imagem {image.shape}, voxel {volume.voxel_sizes(image)}, recorte {box.low} a {box.high} = {box.shape}", flush=True)
+    box = volume.head_box(image)
+    nib.save(volume.trim(image, box), str(trimmed_path))
+    overcommit = Path("/proc/sys/vm/overcommit_memory")
+    print(f"Imagem {image.shape}, voxel {zooms}, orientação {volume.orientation(image)}", flush=True)
+    print(f"Caixa da cabeça: {box.low} a {box.high} = {box.shape} voxels; o SynthSeg processa {padded(box.shape, zooms)}")
+    if image.shape[:3] == (256, 256, 150):
+        reference = volume.Box(*REFERENCE_BOX)
+        print(f"Caixa do SynthStrip (normas): {reference.low} a {reference.high} = {reference.shape} voxels; "
+              f"o SynthSeg processa {padded(reference.shape, zooms)}")
+    if overcommit.exists():
+        print(f"Política de memória do Linux (overcommit_memory): {overcommit.read_text().strip()}", flush=True)
 
     names = [s.title for s in norms.structures] + ["VIC"]
     print(f"\n{'configuração':36s} {'tempo':>7s} {'memória':>9s}  diferença em % das estruturas do relatório (ordem: "

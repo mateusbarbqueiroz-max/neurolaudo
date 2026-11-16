@@ -189,10 +189,14 @@ jobs:
           test -s "$SUJEITO.nii.gz"
       - name: Medir
         run: |
-          lscpu | grep -E "Model name|^CPU\(s\)|Flags" | cut -c1-400
-          free -g | head -2
-          "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/diagnose_segmenter.py "$RUNNER_TEMP/ixi/$SUJEITO.nii.gz" \
-            engine/tests/data/brainquant_ixi_volumes.csv "$SUJEITO" "$RUNNER_TEMP/diag" | tee "$RUNNER_TEMP/diagnostico.txt"
+          lscpu | grep -E "Model name|^CPU\(s\)" | cut -c1-200
+          free -g | head -3
+          MEDIR() { "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/diagnose_segmenter.py "$RUNNER_TEMP/ixi/$SUJEITO.nii.gz" \
+            engine/tests/data/brainquant_ixi_volumes.csv "$SUJEITO" "$1"; }
+          { echo "=== Política de memória padrão do Linux"; MEDIR "$RUNNER_TEMP/diag1"
+            sudo sysctl -w vm.overcommit_memory=1 >/dev/null
+            echo; echo "=== Com o Linux aceitando qualquer pedido de memória (como faz o macOS)"; MEDIR "$RUNNER_TEMP/diag2"
+          } 2>&1 | tee "$RUNNER_TEMP/diagnostico.txt"
       - name: Publicar
         if: always()
         env:
