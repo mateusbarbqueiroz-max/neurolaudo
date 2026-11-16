@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -133,10 +134,12 @@ def _write_raw(path: Path, array: np.ndarray) -> None:
 
 def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
              header: report.ReportHeader | None = None, threads: int | None = None, tools: Tools | None = None,
-             progress: Progress | None = None, series_notes=(), quality: bool = False) -> dict:
+             progress: Progress | None = None, series_notes=(), quality: bool = False, refine: bool = False) -> dict:
     """Roda a volumetria de um volume T1 e grava os resultados em `out_dir`. Devolve o conteúdo de resultado.json.
 
     `series_notes`: avisos sobre a série vindos de quem chamou (por exemplo, "série com contraste").
+    `refine`: depois da primeira segmentação, recorta de novo pela caixa das normas (o que foi segmentado mais
+    15 mm) e segmenta outra vez. Dobra o tempo; scripts/validate_ixi.py mede se compensa.
     `quality`: pede também as notas automáticas de qualidade do SynthSeg. Fica desligado por padrão por dois
     motivos medidos no exame público IXI002: com as notas, os volumes deixam de ser idênticos aos da tabela que
     ajustou as normas (até 1,3 % de diferença no córtex), e a memória necessária estoura (a rede das notas
@@ -169,12 +172,15 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
     seg_path, vol_path, qc_path = work / "segmentacao.nii.gz", work / "volumes.csv", work / "qualidade.csv"
     segment_started = time.monotonic()
     attempts = 0
-    while True:
+    first_box = None
+
+    def segment(current: volume.Box, fraction: float, message: str):
+        """Recorta a imagem na caixa, roda o SynthSeg e devolve (imagem recortada, rótulos na grade do recorte)."""
+        nonlocal attempts
         attempts += 1
-        say(0.10 if attempts == 1 else 0.45, "Segmentando (alguns minutos)" if attempts == 1
-            else "Segmentando de novo, com recorte maior")
-        trimmed = volume.trim(image, box)
-        nib.save(trimmed, str(trimmed_path))
+        say(fraction, message)
+        piece = volume.trim(image, current)
+        nib.save(piece, str(trimmed_path))
         for stale in (seg_path, vol_path, qc_path):
             stale.unlink(missing_ok=True)   # o SynthSeg acrescenta linhas a tabelas que já existem
         command = [*tools.synthseg, "--i", str(trimmed_path), "--o", str(seg_path), "--vol", str(vol_path),
@@ -185,18 +191,34 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
         for needed, what in ((seg_path, "a segmentação"), (vol_path, "a tabela de volumes")):
             if not needed.is_file():
                 raise PipelineError(f"A segmentação terminou sem gravar {what}.")
-        try:
-            trimmed_labels = np.asarray(nib.load(str(seg_path)).dataobj)
-            labels = volume.paste_labels(image.shape, box, trimmed_labels)
-        except volume.VolumeError as error:
-            raise PipelineError(str(error)) from error
+        found = np.asarray(nib.load(str(seg_path)).dataobj)
+        if tuple(found.shape[:3]) != current.shape:
+            raise PipelineError(f"A segmentação ({found.shape}) não tem a grade da imagem recortada ({current.shape}).")
+        return piece, found
+
+    try:
+        trimmed, trimmed_labels = segment(box, 0.10, "Segmentando (alguns minutos)")
         # O encéfalo encostou em alguma face do recorte? Então pode ter ficado um pedaço de fora:
         # alarga a caixa desse lado e segmenta de novo (no máximo duas vezes).
-        touching = volume.touching_faces(trimmed_labels, trimmed)
-        growable = [face for face in touching if not volume.at_image_edge(box, face, image.shape)]
-        if not growable or attempts >= MAX_ATTEMPTS:
-            break
-        box = volume.grow(box, growable, zooms, image.shape)
+        while True:
+            touching = volume.touching_faces(trimmed_labels, trimmed)
+            growable = [face for face in touching if not volume.at_image_edge(box, face, image.shape)]
+            if not growable or attempts >= MAX_ATTEMPTS:
+                break
+            box = volume.grow(box, growable, zooms, image.shape)
+            trimmed, trimmed_labels = segment(box, 0.40, "Segmentando de novo, com recorte maior")
+        if refine:
+            # Segundo passo: a caixa das normas (o que foi segmentado mais 15 mm), agora que se sabe onde
+            # está o encéfalo. Os volumes do primeiro passo ficam guardados para comparação.
+            refined = volume.brain_box(trimmed_labels, box, zooms, image.shape)
+            if refined != box:
+                shutil.copy(vol_path, work / "volumes-primeiro-passo.csv")
+                first_box, box = box, refined
+                trimmed, trimmed_labels = segment(box, 0.50, "Segmentando com o recorte das normas")
+                touching = volume.touching_faces(trimmed_labels, trimmed)
+        labels = volume.paste_labels(image.shape, box, trimmed_labels)
+    except volume.VolumeError as error:
+        raise PipelineError(str(error)) from error
     segment_seconds = time.monotonic() - segment_started
     edge_notes = []
     if touching:
@@ -240,7 +262,8 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
         "qualidade": {QC_TITLES_PT.get(k, k): round(v, 3) for k, v in scores.items()},
         "entrada": {"voxels": [int(v) for v in image.shape[:3]], "voxel_mm": [round(z, 3) for z in zooms],
                     "orientacao": volume.orientation(image)},
-        "recorte": {"inicio": list(box.low), "fim": list(box.high), "segmentacoes": attempts},
+        "recorte": {"inicio": list(box.low), "fim": list(box.high), "segmentacoes": attempts,
+                    "primeiro_passo": None if first_box is None else {"inicio": list(first_box.low), "fim": list(first_box.high)}},
         "paginas": page_files,
         "mapa": {"arquivo": "mapa.rgba", "cortes": int(color_map.shape[0]), "linhas": int(color_map.shape[1]),
                  "colunas": int(color_map.shape[2])},

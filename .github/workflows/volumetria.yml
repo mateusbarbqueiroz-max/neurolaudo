@@ -28,7 +28,7 @@ jobs:
   linux:
     if: inputs.onde == 'linux' || inputs.onde == 'ambos'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +51,9 @@ jobs:
       - name: Rodar a volumetria e comparar com os volumes publicados
         run: |
           nproc; free -g | head -2
+          # O Linux recusa pedidos grandes de memória mesmo quando só uma parte seria usada, e o TensorFlow
+          # sem oneDNN faz um pedido assim (uso real medido: 7 GB). O macOS não recusa; aqui fica igual a ele.
+          sudo sysctl -w vm.overcommit_memory=1
           /usr/bin/time -v "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/validate_ixi.py \
             "$RUNNER_TEMP/ixi" engine/tests/data/brainquant_ixi_volumes.csv "$RUNNER_TEMP/saida" \
             2> "$RUNNER_TEMP/tempo.txt" || { tail -30 "$RUNNER_TEMP/tempo.txt"; exit 1; }
@@ -135,7 +138,7 @@ jobs:
 
       - name: Rodar a volumetria no recorte
         run: |
-          if [ "${{ matrix.nome }}" = "mac" ]; then MEDIR="/usr/bin/time -l"; else MEDIR="/usr/bin/time -v"; fi
+          if [ "${{ matrix.nome }}" = "mac" ]; then MEDIR="/usr/bin/time -l"; else MEDIR="/usr/bin/time -v"; sudo sysctl -w vm.overcommit_memory=1; fi
           $MEDIR "$NEUROLAUDO_MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli exame \
             --nifti "$RUNNER_TEMP/ixi/recorte.nii.gz" --saida "$RUNNER_TEMP/saida" \
             --idade "$IDADE" --sexo "$SEXO" --nome "Recorte do voluntário público IXI002" --serie "T1 (banco público IXI), recorte" \

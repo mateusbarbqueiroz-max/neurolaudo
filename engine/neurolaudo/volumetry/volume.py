@@ -83,6 +83,7 @@ HEAD_HEIGHT_MM = 180.0       # do topo da cabeça para baixo: encéfalo, cerebel
 CALVARIUM_MM = (25.0, 100.0)  # faixa abaixo do topo onde se medem a largura e o comprimento
 HEAD_MARGIN_MM = 5.0         # folga em volta
 GROW_MM = 20.0               # quanto a caixa cresce de cada lado em que o encéfalo encostou
+BRAIN_MARGIN_MM = 15.0       # margem das normas em volta do encéfalo
 _COARSE_MM = 4.0             # a cabeça é procurada em blocos de cerca de 4 mm, para o ruído não atrapalhar
 _SIDE_NAMES = {"R": "direita", "L": "esquerda", "A": "frente", "P": "trás", "S": "topo", "I": "base"}
 _OPPOSITE = {"R": "L", "L": "R", "A": "P", "P": "A", "S": "I", "I": "S"}
@@ -220,3 +221,18 @@ def grow(box: Box, faces, zooms, shape, mm: float = GROW_MM) -> Box:
         else:
             high[axis] = min(int(shape[axis]), high[axis] + step)
     return Box(tuple(low), tuple(high))
+
+
+def brain_box(trimmed_labels: np.ndarray, box: Box, zooms, shape, margin_mm: float = BRAIN_MARGIN_MM) -> Box:
+    """Caixa das normas a partir da segmentação: tudo o que foi rotulado (encéfalo e liquor) mais a margem.
+
+    As normas usaram a caixa da máscara do SynthStrip mais 15 mm; o conjunto dos rótulos do SynthSeg
+    ocupa praticamente o mesmo espaço (o conteúdo de dentro do crânio).
+    """
+    occupied = np.argwhere(trimmed_labels > 0)
+    if occupied.size == 0:
+        raise VolumeError("a segmentação veio vazia: a série não parece ser de crânio")
+    margin = np.ceil(margin_mm / np.asarray(zooms[:3], dtype=float)).astype(int)
+    low = np.maximum(occupied.min(0) + np.asarray(box.low) - margin, 0)
+    high = np.minimum(occupied.max(0) + np.asarray(box.low) + margin + 1, np.asarray(shape[:3]))
+    return Box(tuple(int(v) for v in low), tuple(int(v) for v in high))

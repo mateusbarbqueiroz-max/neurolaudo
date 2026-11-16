@@ -268,3 +268,16 @@ def test_fake_engine_folder_and_t1_phantom_work_together(tmp_path, monkeypatch):
     result = pipeline.run_exam(str(t1), str(tmp_path / "saida"), age=68.7, sex="F")
     assert result["entrada"]["orientacao"] == "PIR"
     assert result["mapa"] == {"arquivo": "mapa.rgba", "cortes": 96, "linhas": 112, "colunas": 128}
+
+
+def test_second_pass_recrops_to_what_was_segmented_plus_15_mm(fake_tools, tmp_path):
+    t1, out = tmp_path / "t1.nii", tmp_path / "saida"
+    affine, data = make_t1(t1)
+    result = pipeline.run_exam(str(t1), str(out), age=40, sex="F", refine=True)
+    cut = result["recorte"]
+    assert cut["segmentacoes"] == 2 and cut["primeiro_passo"] is not None
+    assert (out / "trabalho" / "volumes-primeiro-passo.csv").is_file()
+    # A caixa final é a do que o segmentador rotulou (aqui, tudo acima de 50) mais 15 mm, dentro da imagem.
+    occupied = np.argwhere(data > 50)
+    assert cut["inicio"] == [max(int(v) - 15, 0) for v in occupied.min(0)]
+    assert cut["fim"] == [min(int(v) + 16, n) for v, n in zip(occupied.max(0), data.shape)]
