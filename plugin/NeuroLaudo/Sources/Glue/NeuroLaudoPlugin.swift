@@ -60,6 +60,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         static let comparePrior = "comparar-anterior"
         static let autoOpenToggle = "abrir-ao-chegar"
         static let about = "sobre"
+        static let selfTest = "autoteste"
     }
 
     static let aboutText = """
@@ -97,7 +98,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
     public func activate(with context: IsiXPluginContext) throws {
         self.context = context
         if presenter == nil { presenter = PresenterFactory.make() }
-        autoOpen = AutoOpen(store: settings ?? DefaultsStore())
+        let store = settings ?? DefaultsStore()
+        autoOpen = AutoOpen(store: store)
 
         try registerWindowCommands(context)
         try registerMeasureCommands(context)
@@ -108,8 +110,18 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             let version = self?.context?.info.version ?? ""
             self?.presenter?.show(MeasureOutcome(title: "NeuroLaudo \(version)", text: Self.aboutText), in: invocation.parentWindow)
         }
+        // Só no teste automático (IsiX aberto com -NeuroLaudoAutoteste YES).
+        let selfTest = store.bool(forKey: SelfTest.settingsKey) == true
+        if selfTest {
+            try context.register(IsiXCommand(id: Command.selfTest, title: "NeuroLaudo: autoteste", placement: .other,
+                                             requirement: .viewer)) { invocation in
+                guard let viewer = invocation.viewer else { return }
+                SelfTest.runAndLog(in: viewer)
+            }
+        }
         // Prova de que o IsiX carregou e ativou o complemento; ver PluginLog.
-        PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(NeuroWindowPresets.ct.count + 8) comandos")
+        let count = NeuroWindowPresets.ct.count + 8 + (selfTest ? 1 : 0)
+        PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(count) comandos")
     }
 
     public func deactivate() {

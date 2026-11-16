@@ -95,6 +95,7 @@ extension StudyInfo {
         if !selection.missing.isEmpty {
             text += " Não encontrei: " + selection.missing.joined(separator: ", ") + "."
         }
+        PluginLog.note("protocolo: \(opened.count) série(s) aberta(s), \(selection.missing.count) posição(ões) sem série")
         return MeasureOutcome(title: chosen.title, text: text)
     }
 
@@ -131,6 +132,7 @@ extension StudyInfo {
                                   text: "A série «\(match.description)» do exame anterior\(dateText(prior.date)) já está aberta.")
         }
         try database.openViewer(forSeries: match.uid)
+        PluginLog.note("comparação: série equivalente do exame anterior aberta")
         return MeasureOutcome(title: "Comparar com exame anterior",
                               text: "Aberta a série «\(match.description)» do exame anterior\(dateText(prior.date)).")
     }

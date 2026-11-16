@@ -9,9 +9,11 @@ import IsiXPluginKit
     let plugin = NeuroLaudoPlugin()
     let settings = MemoryStore()
 
-    init() throws {
+    /// `selfTest`: ativa como o teste automático no servidor Mac (-NeuroLaudoAutoteste YES).
+    init(selfTest: Bool = false) throws {
         plugin.presenter = presenter
         plugin.settings = settings
+        if selfTest { settings.set(true, forKey: SelfTest.settingsKey) }
         try plugin.activate(with: context)
     }
 

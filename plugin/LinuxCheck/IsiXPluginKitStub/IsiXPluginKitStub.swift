@@ -562,6 +562,17 @@ public struct IsiXInputKinds: OptionSet, Hashable, Sendable {
         return stubROIs[index]
     }
 
+    /// Na imitação só o comprimento de linhas é calculado.
+    public func statistics(of id: IsiXROIID) throws -> IsiXROIStatistics {
+        try checkOpen()
+        guard let roi = stubROIs.first(where: { $0.id == id }) else { throw IsiXPluginError.roiNotFound }
+        var length: Double?
+        if roi.kind == .line, let first = roi.patientPoints.first, let last = roi.patientPoints.last {
+            length = (last - first).length
+        }
+        return IsiXROIStatistics(mean: 0, standardDeviation: 0, minimum: 0, maximum: 0, sum: 0, area: nil, length: length)
+    }
+
     public func setNeedsDisplay() {}
 }
 
