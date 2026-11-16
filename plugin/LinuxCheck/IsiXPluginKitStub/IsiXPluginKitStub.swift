@@ -167,6 +167,56 @@ public struct IsiXImageAttributes: Hashable, Sendable {
     }
 }
 
+// MARK: - Pixels e imagens
+
+public struct IsiXPixelBuffer<Sample>: Sendable, Equatable where Sample: Equatable, Sample: Sendable {
+    public let width: Int
+    public let height: Int
+    public let channels: Int
+    public private(set) var samples: [Sample]
+
+    public init(width: Int, height: Int, channels: Int = 1, samples: [Sample]) throws {
+        guard width > 0, height > 0, channels > 0, samples.count == width * height * channels else {
+            throw IsiXPluginError.dimensionMismatch
+        }
+        self.width = width
+        self.height = height
+        self.channels = channels
+        self.samples = samples
+    }
+
+    public subscript(column: Int, row: Int, channel: Int = 0) -> Sample {
+        get { samples[(row * width + column) * channels + channel] }
+        set { samples[(row * width + column) * channels + channel] = newValue }
+    }
+}
+
+public enum IsiXPixelData: Sendable, Equatable {
+    case float32(IsiXPixelBuffer<Float>)
+    case rgba8(IsiXPixelBuffer<UInt8>)
+}
+
+public struct IsiXImageVersion: Hashable, Sendable {
+    public let viewer: IsiXViewerID
+    public let slice: Int
+    public let phase: Int
+}
+
+public struct IsiXImage: Sendable {
+    public let version: IsiXImageVersion
+    public let geometry: IsiXImageGeometry
+    public let attributes: IsiXImageAttributes
+    public let pixels: IsiXPixelData
+
+    public var viewerID: IsiXViewerID { version.viewer }
+    public var slice: Int { version.slice }
+    public var phase: Int { version.phase }
+    public var scalarPixels: IsiXPixelBuffer<Float>? {
+        if case .float32(let buffer) = pixels { return buffer }
+        return nil
+    }
+}
+
 public struct IsiXWindowLevel: Hashable, Sendable {
     public var center: Double
     public var width: Double
@@ -482,6 +532,8 @@ public struct IsiXInputKinds: OptionSet, Hashable, Sendable {
     public var stubROIs: [IsiXROI] = []
     public var stubWindowLevel = IsiXWindowLevel(center: 40, width: 400)
     public var stubIsOpen = true
+    /// Cortes com geometria e pixels próprios (só do stub). Vazio: todos os cortes usam `stubGeometry`.
+    public var stubSlices: [(geometry: IsiXImageGeometry, pixels: IsiXPixelData)] = []
 
     public init(stubSeries: IsiXSeriesSummary, geometry: IsiXImageGeometry) {
         self.id = IsiXViewerID()
@@ -511,15 +563,37 @@ public struct IsiXInputKinds: OptionSet, Hashable, Sendable {
         stubSeries.currentSlice = slice
     }
 
-    public func geometry(slice: Int? = nil, phase: Int? = nil) throws -> IsiXImageGeometry {
+    private func checked(_ slice: Int?) throws -> Int {
         try checkOpen()
-        return stubGeometry
+        let index = slice ?? stubSeries.currentSlice
+        guard index >= 0, index < stubSeries.sliceCount else { throw IsiXPluginError.sliceOutOfRange(index) }
+        return index
+    }
+
+    public func geometry(slice: Int? = nil, phase: Int? = nil) throws -> IsiXImageGeometry {
+        let index = try checked(slice)
+        return index < stubSlices.count ? stubSlices[index].geometry : stubGeometry
     }
 
     public func attributes(slice: Int? = nil, phase: Int? = nil) throws -> IsiXImageAttributes {
-        try checkOpen()
+        let index = try checked(slice)
         return IsiXImageAttributes(modality: stubSeries.modality, studyInstanceUID: stubSeries.studyInstanceUID,
-                                   seriesInstanceUID: stubSeries.seriesInstanceUID)
+                                   seriesInstanceUID: stubSeries.seriesInstanceUID,
+                                   sopInstanceUID: "\(stubSeries.seriesInstanceUID ?? "1.2.3").\(index + 1)")
+    }
+
+    public func image(slice: Int? = nil, phase: Int? = nil) throws -> IsiXImage {
+        let index = try checked(slice)
+        let geometry = try self.geometry(slice: index)
+        let pixels: IsiXPixelData
+        if index < stubSlices.count {
+            pixels = stubSlices[index].pixels
+        } else {
+            pixels = .float32(try IsiXPixelBuffer(width: geometry.columns, height: geometry.rows,
+                                                  samples: [Float](repeating: 0, count: geometry.columns * geometry.rows)))
+        }
+        return IsiXImage(version: IsiXImageVersion(viewer: id, slice: index, phase: 0), geometry: geometry,
+                         attributes: try attributes(slice: index), pixels: pixels)
     }
 
     public func windowLevel() throws -> IsiXWindowLevel {
@@ -587,6 +661,8 @@ public struct IsiXStudy: Hashable, Sendable {
     public var modalities: [String]
     public var seriesCount: Int
     public var accessionNumber: String?
+    public var patientBirthDate: Date?
+    public var patientSex: String?
 
     public init(stubUID: String, patientID: String?, studyDescription: String? = nil, studyDate: Date?, modalities: [String]) {
         self.studyInstanceUID = stubUID
@@ -665,6 +741,8 @@ public struct IsiXStudyQuery: Hashable, Sendable {
     public var stubSelection = IsiXDatabaseSelection()
     /// As séries abertas por `openViewer(forSeries:)`, na ordem.
     public var stubOpened: [String] = []
+    /// Os pedidos feitos a `writeDerivedSeries`, com os arquivos devolvidos.
+    public var stubWritten: [(request: IsiXDerivedSeriesRequest, files: [URL])] = []
     weak var stubContext: IsiXPluginContext?
 
     public init(stub: Void = ()) {}
@@ -715,6 +793,139 @@ public struct IsiXStudyQuery: Hashable, Sendable {
     }
 }
 
+public struct IsiXDerivedSeriesRequest: Sendable, Equatable {
+    public var studyInstanceUID: String
+    public var seriesDescription: String
+    public var images: [IsiXPixelData]
+    public var sourceSOPInstanceUID: String?
+    public var seriesInstanceUID: String?
+    public var seriesNumber: Int?
+    public var firstInstanceNumber: Int = 1
+    public var geometries: [IsiXImageGeometry]?
+    public var windowLevel: IsiXWindowLevel?
+
+    public init(studyInstanceUID: String, seriesDescription: String, images: [IsiXPixelData]) {
+        self.studyInstanceUID = studyInstanceUID
+        self.seriesDescription = seriesDescription
+        self.images = images
+    }
+}
+
+public struct IsiXImportResult: Hashable, Sendable {
+    public struct Failure: Hashable, Sendable {
+        public var file: URL
+        public var reason: String
+    }
+
+    public var importedFiles: [URL]
+    public var studyInstanceUIDs: [String]
+    public var seriesInstanceUIDs: [String]
+    public var failures: [Failure]
+}
+
+extension IsiXDatabase {
+    /// Grava as imagens como arquivos (aqui, arquivos vazios em uma pasta temporária) e guarda o pedido em `stubWritten`.
+    public func writeDerivedSeries(_ request: IsiXDerivedSeriesRequest) throws -> [URL] {
+        guard !request.images.isEmpty else { throw IsiXPluginError.hostFailure("no images") }
+        if let geometries = request.geometries, geometries.count != request.images.count {
+            throw IsiXPluginError.dimensionMismatch
+        }
+        guard stubStudies.contains(where: { $0.studyInstanceUID == request.studyInstanceUID }) else {
+            throw IsiXPluginError.notFound(request.studyInstanceUID)
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("isix-stub-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var files: [URL] = []
+        for index in request.images.indices {
+            let file = folder.appendingPathComponent("\(index + 1).dcm")
+            try Data().write(to: file)
+            files.append(file)
+        }
+        stubWritten.append((request: request, files: files))
+        return files
+    }
+
+    /// Acrescenta ao banco uma série para cada pedido cujos arquivos estejam na lista.
+    public func importFiles(at urls: [URL]) throws -> IsiXImportResult {
+        var result = IsiXImportResult(importedFiles: [], studyInstanceUIDs: [], seriesInstanceUIDs: [], failures: [])
+        for written in stubWritten where written.files.contains(where: { urls.contains($0) }) {
+            guard written.files.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) else {
+                result.failures.append(.init(file: written.files[0], reason: "file missing"))
+                continue
+            }
+            let uid = written.request.seriesInstanceUID ?? "9.9.\(stubSeries.count + 1)"
+            stubSeries.append(IsiXSeries(stubUID: uid, studyUID: written.request.studyInstanceUID,
+                                         description: written.request.seriesDescription, modality: "SC",
+                                         imageCount: written.request.images.count))
+            result.importedFiles += written.files
+            result.seriesInstanceUIDs.append(uid)
+            if !result.studyInstanceUIDs.contains(written.request.studyInstanceUID) {
+                result.studyInstanceUIDs.append(written.request.studyInstanceUID)
+            }
+        }
+        return result
+    }
+}
+
+// MARK: - Tarefas
+
+public final class IsiXTaskProgress: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fraction = 0.0
+    private var text: String?
+    private var cancelled = false
+
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
+
+    public var fractionCompleted: Double { locked { fraction } }
+    public var message: String? { locked { text } }
+    public var isCancelled: Bool { locked { cancelled } }
+
+    public func report(_ fraction: Double, message: String? = nil) {
+        locked {
+            self.fraction = fraction
+            if let message { text = message }
+        }
+    }
+
+    public func stubCancel() { locked { cancelled = true } }
+
+    /// No kit de verdade só o IsiX cria o andamento; os testes usam esta porta.
+    public static func stubMake() -> IsiXTaskProgress { IsiXTaskProgress() }
+}
+
+@MainActor public final class IsiXTask {
+    public let name: String
+    public let progress: IsiXTaskProgress
+    public private(set) var isFinished = false
+    public private(set) var error: (any Error)?
+    var stubWork: Task<Void, Never>?
+
+    init(name: String, progress: IsiXTaskProgress) {
+        self.name = name
+        self.progress = progress
+    }
+
+    public func cancel() {
+        progress.stubCancel()
+        stubWork?.cancel()
+    }
+
+    public func value() async throws {
+        await stubWork?.value
+        if let error { throw error }
+    }
+
+    func stubFinish(_ error: (any Error)?) {
+        self.error = error
+        isFinished = true
+    }
+}
+
 // MARK: - Plugin e contexto
 
 public struct IsiXPluginInfo: Sendable, Equatable {
@@ -753,6 +964,7 @@ extension IsiXPlugin {
     public var stubCommands: [(command: IsiXCommand, handler: StubCommandHandler)] = []
     public var stubInputHandlers: [(kinds: IsiXInputKinds, handler: StubInputHandler)] = []
     public let stubDatabase = IsiXDatabase()
+    public var stubTasks: [IsiXTask] = []
 
     public init(stubInfo: IsiXPluginInfo = IsiXPluginInfo(stubIdentifier: "app.neurolaudo.isixplugin", name: "NeuroLaudo", version: "0")) {
         info = stubInfo
@@ -793,6 +1005,20 @@ extension IsiXPlugin {
     }
 
     public func database() throws -> IsiXDatabase { stubDatabase }
+
+    @discardableResult
+    public func startTask(named name: String, _ operation: @escaping @Sendable (IsiXTaskProgress) async throws -> Void) throws -> IsiXTask {
+        let progress = IsiXTaskProgress()
+        let task = IsiXTask(name: name, progress: progress)
+        task.stubWork = Task.detached {
+            var failure: (any Error)?
+            do { try await operation(progress) } catch { failure = error }
+            let outcome = failure
+            await MainActor.run { task.stubFinish(outcome) }
+        }
+        stubTasks.append(task)
+        return task
+    }
 
     public func interceptInput(_ kinds: IsiXInputKinds = .all,
                                _ handler: @escaping @MainActor @Sendable (IsiXViewerInput) -> Bool) throws -> IsiXObservation {

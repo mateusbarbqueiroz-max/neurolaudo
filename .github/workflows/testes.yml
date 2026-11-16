@@ -18,6 +18,11 @@ jobs:
         run: |
           swift --version
           swift test
+      - name: O volume gravado pelo complemento é lido pelo motor
+        run: |
+          (cd plugin && NEUROLAUDO_NIFTI_TESTE="$RUNNER_TEMP/complemento.nii" swift test --filter VolumeGridTests)
+          python3 -m pip install --quiet nibabel numpy
+          python3 engine/scripts/check_swift_nifti.py "$RUNNER_TEMP/complemento.nii"
       - name: O complemento não usa nada que só exista na imitação do kit
         run: |
           if grep -rn "stub" plugin/NeuroLaudo/Sources; then

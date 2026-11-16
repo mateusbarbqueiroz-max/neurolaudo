@@ -59,6 +59,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         static let protocolAuto = "protocolo-neuro"
         static let comparePrior = "comparar-anterior"
         static let autoOpenToggle = "abrir-ao-chegar"
+        static let volumetry = "volumetria"
         static let about = "sobre"
         static let selfTest = "autoteste"
     }
@@ -79,6 +80,11 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         • Abrir exame ao chegar: liga ou desliga a abertura automática do exame que chega \
         pelo botão do PACS. Vem ligada.
 
+        Volumetria cerebral (menu Plugins › Image Filters), com a série T1 volumétrica sem contraste aberta: \
+        mede hipocampos, amígdalas, tálamos, ventrículos, córtex e substância branca, compara com adultos \
+        saudáveis da mesma idade e sexo e grava no exame um relatório e um mapa colorido. Leva alguns minutos \
+        e exige o motor de volumetria instalado. Uso em pesquisa, não validado para diagnóstico.
+
         Uso em apoio à leitura. Sem certificação para diagnóstico.
         """
 
@@ -90,6 +96,9 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
     var settings: SettingsStore?
     private var eventObservation: IsiXObservation?
     private var autoOpen: AutoOpen?
+    /// Quem roda a volumetria. Trocado pelos testes; por padrão, o motor instalado no Mac.
+    var engine: (any VolumetryEngine)?
+    private var volumetryTask: IsiXTask?
 
     public init() {}
 
@@ -104,6 +113,11 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         try registerWindowCommands(context)
         try registerMeasureCommands(context)
         try registerStudyCommands(context)
+        try context.register(IsiXCommand(id: Command.volumetry, title: "Volumetria cerebral (pesquisa)…",
+                                         placement: .imageFilters, requirement: .viewer)) { [weak self] invocation in
+            guard let self, let context = self.context, let viewer = invocation.viewer else { return }
+            try self.startVolumetry(in: viewer, context: context)
+        }
 
         try context.register(IsiXCommand(id: Command.about, title: "NeuroLaudo: ajuda", placement: .other,
                                          requirement: .none)) { [weak self] invocation in
@@ -120,7 +134,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             }
         }
         // Prova de que o IsiX carregou e ativou o complemento; ver PluginLog.
-        let count = NeuroWindowPresets.ct.count + 8 + (selfTest ? 1 : 0)
+        let count = NeuroWindowPresets.ct.count + 9 + (selfTest ? 1 : 0)
         PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(count) comandos")
     }
 
@@ -130,6 +144,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         eventObservation?.invalidate()
         eventObservation = nil
         autoOpen = nil
+        volumetryTask?.cancel()
+        volumetryTask = nil
         presenter?.closeAll()
         presenter = nil
         context = nil
@@ -221,6 +237,41 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             guard let self, let context = self.context else { return }
             self.autoOpen?.handle(event, context: context)
         }
+    }
+
+    // MARK: volumetria
+
+    /// Começa a volumetria da série aberta e devolve a tarefa em segundo plano.
+    @discardableResult
+    func startVolumetry(in viewer: IsiXViewer, context: IsiXPluginContext) throws -> IsiXTask {
+        if let running = volumetryTask, !running.isFinished {
+            throw PluginFailure("Já há uma volumetria em andamento. Aguarde o resultado.")
+        }
+        let engine: any VolumetryEngine = self.engine ?? ProcessEngine.standard()
+        try engine.checkInstalled()
+        let job = try Volumetry.prepare(viewer: viewer, context: context)
+        PluginLog.note("volumetria: série copiada, \(job.geometries.count) cortes, orientação \(job.orientation)")
+        // O que fazer na janela quando o motor terminar. Fica na linha principal, como os outros comandos.
+        let finish: @MainActor @Sendable (MeasureOutcome, VolumetryStored?) -> Void = { [weak self] outcome, stored in
+            self?.finishVolumetry(outcome, stored: stored, context: context)
+        }
+        let task = try context.startTask(named: "Volumetria cerebral") { progress in
+            let done = await Volumetry.perform(job, engine: engine, context: context, progress: progress)
+            await finish(done.outcome, done.stored)
+        }
+        volumetryTask = task
+        return task
+    }
+
+    private func finishVolumetry(_ outcome: MeasureOutcome, stored: VolumetryStored?, context: IsiXPluginContext) {
+        if let stored {
+            PluginLog.note("volumetria: concluída, relatório \(stored.reportSeriesUID ?? "-"), mapa \(stored.mapSeriesUID ?? "-")")
+            // Abre o mapa colorido, para conferir a segmentação ao lado do T1.
+            if let map = stored.mapSeriesUID { _ = try? context.database().openViewer(forSeries: map) }
+        } else {
+            PluginLog.note("volumetria: não concluída. \(outcome.text.prefix(300))")
+        }
+        presenter?.show(outcome, in: nil)
     }
 
     // MARK: apoio

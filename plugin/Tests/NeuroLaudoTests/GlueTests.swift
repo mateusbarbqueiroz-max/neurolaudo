@@ -95,7 +95,7 @@ final class GlueTests: XCTestCase {
     func testActivationRegistersEveryCommandOnce() throws {
         try onMain { h in
         let ids = h.context.stubCommands.map(\.command.id)
-        XCTAssertEqual(ids.count, 14)
+        XCTAssertEqual(ids.count, 15)
         XCTAssertEqual(Set(ids).count, ids.count)
         for preset in NeuroWindowPresets.ct { XCTAssertTrue(ids.contains(preset.id)) }
         XCTAssertTrue(ids.contains(NeuroLaudoPlugin.Command.evans))

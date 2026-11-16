@@ -30,6 +30,7 @@
 		<string>viewer.write</string>
 		<string>roi</string>
 		<string>database.read</string>
+		<string>database.import</string>
 	</array>
 </dict>
 </plist>
