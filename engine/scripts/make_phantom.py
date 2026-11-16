@@ -10,7 +10,7 @@ import sys
 
 import numpy as np
 from pydicom.dataset import Dataset, FileMetaDataset
-from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, generate_uid
+from pydicom.uid import CTImageStorage, ExplicitVRLittleEndian, MRImageStorage, generate_uid
 
 
 def phantom(nz=64, ny=256, nx=256, sz=2.5, sxy=0.8) -> np.ndarray:
@@ -79,7 +79,78 @@ def write(out: str, nz=64, ny=256, nx=256, sz=2.5, sxy=0.8) -> list[str]:
     return paths
 
 
+# Nomes de série no estilo de um exame de rotina de RM de encéfalo.
+MR_SERIES = ["AX FLAIR", "AX DWI b1000", "AX ADC", "AX SWI", "SAG T1 MPRAGE", "SAG T1 MPRAGE GD"]
+
+
+def write_mr_study(out: str, study_date: str, series=MR_SERIES, nz=16, ny=128, nx=128, sz=10.0, sxy=1.6,
+                   patient_id="000002", accession="RM1") -> dict[str, list[str]]:
+    """Grava um estudo de RM sintético, uma pasta por série. Devolve os arquivos por série.
+
+    As imagens são o mesmo fantoma com brilho diferente em cada série: servem
+    para testar protocolos de exibição e comparação, não a aparência de cada sequência.
+    """
+    base = np.clip(phantom(nz, ny, nx, sz, sxy) + 1024, 0, 4095)   # intensidades positivas, como em RM
+    study, frame = generate_uid(), generate_uid()
+    written: dict[str, list[str]] = {}
+    for number, description in enumerate(series, start=1):
+        series_uid = generate_uid()
+        folder = os.path.join(out, f"{number:02d}")
+        os.makedirs(folder, exist_ok=True)
+        scale = 0.4 + 0.1 * number
+        paths = []
+        for k in range(nz):
+            meta = FileMetaDataset()
+            meta.MediaStorageSOPClassUID = MRImageStorage
+            meta.MediaStorageSOPInstanceUID = generate_uid()
+            meta.TransferSyntaxUID = ExplicitVRLittleEndian
+            ds = Dataset()
+            ds.file_meta = meta
+            ds.SOPClassUID = MRImageStorage
+            ds.SOPInstanceUID = meta.MediaStorageSOPInstanceUID
+            ds.StudyInstanceUID, ds.SeriesInstanceUID, ds.FrameOfReferenceUID = study, series_uid, frame
+            ds.PatientName = "FANTOMA^RM"
+            ds.PatientID = patient_id
+            ds.PatientBirthDate = "19650101"
+            ds.PatientSex = "O"
+            ds.StudyDate = study_date
+            ds.StudyTime = "120000"
+            ds.StudyDescription = "RM ENCEFALO"
+            ds.SeriesDescription = description
+            ds.SeriesNumber = number
+            ds.AccessionNumber = accession
+            ds.Modality = "MR"
+            ds.InstanceNumber = k + 1
+            ds.ImagePositionPatient = [-(nx / 2) * sxy, -(ny / 2) * sxy, float(k) * sz]
+            ds.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
+            ds.PixelSpacing = [sxy, sxy]
+            ds.SliceThickness = sz
+            ds.Rows, ds.Columns = ny, nx
+            ds.SamplesPerPixel = 1
+            ds.PhotometricInterpretation = "MONOCHROME2"
+            ds.BitsAllocated, ds.BitsStored, ds.HighBit = 16, 12, 11
+            ds.PixelRepresentation = 0
+            ds.PixelData = (base[k] * scale).astype(np.uint16).tobytes()
+            p = os.path.join(folder, f"IM{k:04d}.dcm")
+            ds.save_as(p, enforce_file_format=True)
+            paths.append(p)
+        written[description] = paths
+    return written
+
+
+def write_mr_pair(out: str) -> None:
+    """Dois exames de RM do mesmo paciente: `anterior` (janeiro) e `atual` (novembro)."""
+    write_mr_study(os.path.join(out, "anterior"), "20260110", accession="RM0")
+    write_mr_study(os.path.join(out, "atual"), "20261115", accession="RM1")
+
+
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else "phantom"
-    write(out)
-    print(f"Fantoma gravado em {out}/")
+    args = sys.argv[1:]
+    if args and args[0] == "--rm":
+        out = args[1] if len(args) > 1 else "phantom-rm"
+        write_mr_pair(out)
+        print(f"Fantomas de RM gravados em {out}/anterior e {out}/atual")
+    else:
+        out = args[0] if args else "phantom"
+        write(out)
+        print(f"Fantoma gravado em {out}/")

@@ -143,6 +143,19 @@ jobs:
           end run
           EOF
           }
+          # Clica em um comando do menu Plugins: plugin_clicar "Database" "Comparar com exame anterior".
+          plugin_clicar() {
+            /usr/bin/osascript - "$1" "$2" 2>&1 <<'EOF' || true
+          on run argv
+            tell application "System Events"
+              tell process "IsiX DICOM Viewer"
+                click menu item (item 2 of argv) of menu 1 of menu item (item 1 of argv) of menu "Plugins" of menu bar 1
+              end tell
+            end tell
+            return "plugins: " & (item 1 of argv) & " > " & (item 2 of argv)
+          end run
+          EOF
+          }
           # Todas as janelas do IsiX que o macOS conhece, visíveis ou não, com posição e tamanho.
           diag() {
             /usr/bin/swift "$RUNNER_TEMP/diag.swift" 2>&1 | head -40 || true
@@ -196,6 +209,7 @@ jobs:
         run: |
           python -m pip install --quiet numpy pydicom
           python engine/scripts/make_phantom.py "$RUNNER_TEMP/fantoma"
+          python engine/scripts/make_phantom.py --rm "$RUNNER_TEMP/rm"
           ls "$RUNNER_TEMP/fantoma" | wc -l
 
       - name: Abrir o IsiX
@@ -209,6 +223,7 @@ jobs:
             -AUTOCLEANINGSPACE NO -AUTOCLEANINGDATE NO -AUTOROUTINGACTIVATED NO -STORESCP NO -USESTORESCP NO \
             -publishDICOMBonjour NO -searchDICOMBonjour NO \
             -checkForUpdatesPlugins NO -SUEnableAutomaticChecks NO -httpXMLRPCServer YES -httpXMLRPCServerAccessScope 0 \
+            -NeuroLaudoAutoteste YES \
             > "$SAIDA/isix-saida.txt" 2>&1 &
           sleep 30
           pgrep -fl "IsiX DICOM Viewer.app/Contents/MacOS/" | cut -c1-80 || echo "O IsiX não está rodando"
@@ -228,14 +243,9 @@ jobs:
           echo "avisos aceitos: $(permitir)"
           clicar_isix "Copy Links"
           sleep 35
-          janelas
-          diag
           menu_clicar "Window" "Tile 2D Viewer Windows"
           sleep 5
-          menu_clicar "Window" "Bring All to Front"
-          sleep 3
           janelas
-          diag
           screencapture -x "$SAIDA/2-importado.png" || echo "captura falhou"
 
       - name: Janela de osso pelo atalho do complemento (⌃⌥4)
@@ -248,12 +258,53 @@ jobs:
           janelas
           screencapture -x "$SAIDA/3-osso.png" || echo "captura falhou"
 
+      - name: Autoteste das medidas dentro do IsiX (linhas desenhadas pelo complemento)
+        run: |
+          source "$RUNNER_TEMP/ui.sh"
+          /usr/bin/osascript -e 'tell application "IsiX DICOM Viewer" to activate' || true
+          sleep 2
+          plugin_clicar "Others" "NeuroLaudo: autoteste"
+          sleep 8
+          log show --last 2m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' 2>/dev/null | grep "autoteste" || echo "sem linhas de autoteste no registro"
+
+      - name: RM com exame anterior (protocolo de neuro ao chegar)
+        run: |
+          source "$RUNNER_TEMP/ui.sh"
+          menu_clicar "Window" "Close All Viewers"
+          sleep 3
+          open -a "$APP" "$RUNNER_TEMP/rm/anterior" || echo "open falhou"
+          sleep 15
+          clicar_isix "Copy Links"
+          sleep 30
+          menu_clicar "Window" "Close All Viewers"
+          sleep 3
+          open -a "$APP" "$RUNNER_TEMP/rm/atual" || echo "open falhou"
+          sleep 15
+          clicar_isix "Copy Links"
+          sleep 35
+          menu_clicar "Window" "Tile 2D Viewer Windows"
+          sleep 6
+          janelas
+          screencapture -x "$SAIDA/4-rm-protocolo.png" || echo "captura falhou"
+
+      - name: Comparar com exame anterior
+        run: |
+          source "$RUNNER_TEMP/ui.sh"
+          /usr/bin/osascript -e 'tell application "IsiX DICOM Viewer" to activate' || true
+          sleep 2
+          plugin_clicar "Database" "Comparar com exame anterior"
+          sleep 12
+          menu_clicar "Window" "Tile 2D Viewer Windows"
+          sleep 6
+          janelas
+          screencapture -x "$SAIDA/5-rm-comparacao.png" || echo "captura falhou"
+
       - name: Registros
         if: always()
         run: |
-          log show --last 15m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' > "$SAIDA/registro-neurolaudo.txt" 2>&1 || true
-          log show --last 15m --style compact --predicate 'process == "IsiX DICOM Viewer"' 2>/dev/null | grep -iE "plugin|neurolaudo|horos URL|exception" | tail -100 > "$SAIDA/registro-isix.txt" || true
-          echo "--- NeuroLaudo:"; tail -20 "$SAIDA/registro-neurolaudo.txt"
+          log show --last 20m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' > "$SAIDA/registro-neurolaudo.txt" 2>&1 || true
+          log show --last 20m --style compact --predicate 'process == "IsiX DICOM Viewer"' 2>/dev/null | grep -iE "plugin|neurolaudo|horos URL|exception" | tail -100 > "$SAIDA/registro-isix.txt" || true
+          echo "--- NeuroLaudo:"; tail -40 "$SAIDA/registro-neurolaudo.txt"
           echo "--- saída do IsiX (fim):"; tail -30 "$SAIDA/isix-saida.txt" || true
           echo "--- porta de comandos:"; grep -i "XML-RPC interface" "$SAIDA/isix-saida.txt" || echo "linha não encontrada"
 
