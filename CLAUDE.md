@@ -41,14 +41,24 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
   - `SDK/`: kit do IsiX, copiado do modelo. Não editar.
   - `LinuxCheck/`: imitação do kit, só para conferir e testar em Linux.
   - `script/`, `Config/`, `NeuroLaudo.xcodeproj`: do modelo de plugin do IsiX.
-- `engine/`: motor em Python (leitura DICOM; volumetria por fazer).
-- `mac/`: scripts para o Mac do usuário.
+- `engine/`: motor em Python.
+  - `neurolaudo/volumetry/`: `pipeline.py` (SynthStrip, recorte, SynthSeg, normas), `norms.py`,
+    `report.py` e `overlay.py` (páginas), `volume.py` (NIfTI), `tables.py`, `cli.py`.
+  - `tests/fakes/`: programas de mentira no lugar do SynthStrip e do SynthSeg.
+  - `scripts/`: fantomas (`make_phantom.py`, `--rm`, `--t1`), validação e diagnóstico da volumetria.
+- `mac/`: scripts para o Mac do usuário (`instalar.sh`, `botao-pacs.sh`, `instalar-volumetria.sh`).
+- `docs/VOLUMETRIA.md`: como a volumetria funciona, o que foi medido e o que falta conferir.
 
 ## Comandos
 
 - Testes do complemento em Linux: `cd plugin && swift test`.
 - Testes do motor: `cd engine && python -m pytest -q`.
 - Compilar o complemento: só em macOS, `plugin/script/build.sh --configuration Release`.
+- Acionar testes no GitHub: `gh workflow run ARQUIVO.yml --ref main [-f chave=valor]` (sem `--ref` falha).
+  `isix.yml`: complemento dentro do IsiX. `volumetria.yml -f onde=linux|mac|ambos|diagnostico`:
+  segmentação de verdade em exames públicos.
+- Ler o resultado: `gh api repos/DONO/REPO/actions/runs/ID/jobs` (passos), `.../actions/jobs/ID/logs`
+  (registro) e os arquivos das versões `teste-isix` e `teste-volumetria` (baixar com `curl`).
 
 ## Armadilhas já encontradas
 
@@ -67,3 +77,15 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
   o servidor Mac precisa de um Xcode recente para lê-la.
 - O projeto Xcode usa pasta sincronizada: arquivos `.swift` dentro de
   `plugin/NeuroLaudo/` entram no alvo sem editar o projeto.
+- O Mac compila em Swift 6 (erros de concorrência são erros). Em Linux o Swift 5.10 só avisa: ler os
+  avisos de `swift build`. `weak self` dentro de fecho aninhado não passa; usar um fecho
+  `@MainActor @Sendable` como em `NeuroLaudoPlugin.startVolumetry`. Avisos de `URL` não `Sendable`
+  só existem em Linux.
+- Nesta sessão `sleep` longo em primeiro plano é bloqueado e o GraphQL do GitHub não funciona
+  (`gh release view`, `gh run view`): usar a API REST.
+- Volumetria: TensorFlow e PyTorch não podem ser importados no mesmo processo (aborta com
+  "random_device"). O `mri_synthseg` da instalação mínima precisa de `--noaddctab`. A opção `--qc`
+  muda os volumes e estoura a memória: fica desligada. A biblioteca `surfa` só existe em
+  código-fonte: a versão compilada para Mac fica na versão `motor` do repositório.
+- O matplotlib desta sessão usa a fonte Inter por configuração local; as páginas fixam DejaVu Sans
+  para saírem iguais em qualquer máquina.

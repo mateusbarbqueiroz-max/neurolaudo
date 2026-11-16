@@ -346,7 +346,7 @@ enum Volumetry {
         }
         text += "\n\nO relatório e o mapa colorido da segmentação foram gravados no exame, como duas séries novas. "
             + "Confira no mapa se cada estrutura está no lugar e do lado certo antes de usar os números."
-        return MeasureOutcome(title: "\(title). \(result.disclaimer)", text: text)
+        return MeasureOutcome(title: "Volumetria cerebral. \(result.disclaimer)", text: text)
     }
 
     /// Passos 2 e 3, com a pasta temporária apagada no fim, dê certo ou não.

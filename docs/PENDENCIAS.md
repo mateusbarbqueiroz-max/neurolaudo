@@ -1,6 +1,6 @@
 # Pendências
 
-Atualizado em 15/11/2026.
+Atualizado em 16/11/2026.
 
 ## Situação do Mac
 
@@ -23,7 +23,9 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Usar as medidas em um exame real, desenhando as linhas à mão (Evans, linha média, ABC/2), e abrir o painel do ASPECTS | Junto com o item acima | Média: o cálculo já foi conferido dentro do IsiX com marcas desenhadas pelo complemento; faltam o uso à mão e as telas |
 | Enviar os nomes das séries dos exames de rotina (RM de encéfalo e TC de crânio) | Quando puder; dá para ver no OsiriX MD atual | Média: ajusta os protocolos de exibição ao serviço |
 | Conferir os valores das janelas de TC (encéfalo 40/80, AVC 40/40, subdural 75/215, osso 600/2800, angio-TC 200/700, partes moles 50/350) | Quando puder | Média |
-| Instalar o FreeSurfer 8.2 no Mac novo (registro gratuito) | Quando a volumetria estiver pronta para teste | Só para a Etapa 3 |
+| Ver o exemplo do relatório de volumetria (`docs/exemplo-volumetria.png`) e dizer o que mudar: estruturas, ordem, palavras, frase para o laudo | Quando puder; não precisa de Mac | Média: é a hora mais barata de mudar |
+| Instalar o motor de volumetria (Passo 8 do guia) e rodar em um T1 volumétrico; conferir o mapa colorido e contar o tempo que levou | Quando houver o Mac novo | Alta para a volumetria: é o primeiro teste em exame real |
+| Se houver laudos do NeuroQuant de exames antigos, rodar a nossa volumetria nos mesmos exames e comparar | Depois do item acima | Média: mostra o quanto os dois métodos diferem |
 
 ## Do Claude
 
@@ -31,7 +33,9 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | --- | --- |
 | Encaminhador de links, se o link usar `ServerName` e o autor do IsiX não atender | resposta do usuário e do autor |
 | Protocolos de exibição nativos do IsiX configurados para neuro | nomes das séries |
-| Volumetria: seleção da série, chamada ao FreeSurfer, relatório, saída DICOM | nada para escrever; Mac para testar |
+| Volumetria em exame real: ajustar o que o primeiro teste no Mac mostrar (tempo, memória, nomes de série) | teste do usuário no Mac novo |
+| Volumetria: ver se as notas automáticas de qualidade cabem na memória do Mac novo e, se couberem, oferecê-las como conferência extra | Mac novo |
+| Volumetria: comparação com o exame anterior do mesmo paciente (mudança de volume no tempo) | opinião do usuário sobre o relatório |
 | Laudo | etapas anteriores |
 
 ## Feito

@@ -1,4 +1,4 @@
-# Guia: instalar o IsiX e ligar o botão do PACS
+# Guia: instalar o IsiX, ligar o botão do PACS e usar o NeuroLaudo
 
 Tempo: cerca de 20 minutos. Nada aqui altera ou apaga o OsiriX MD.
 
@@ -142,6 +142,44 @@ está em **Plugins > Others > NeuroLaudo: ajuda**.
 O complemento também abre sozinho o exame que chega pela rede, com as séries
 arrumadas pelo protocolo de neuro. Para desligar ou religar: **Plugins >
 Database > Abrir exame ao chegar: ligar ou desligar**.
+
+## Passo 8 — Volumetria cerebral (opcional, uso em pesquisa)
+
+A volumetria mede hipocampos, amígdalas, tálamos, ventrículos laterais, córtex,
+substância branca e encéfalo em um T1 volumétrico e compara cada volume com o de
+adultos saudáveis da mesma idade e sexo. **Não é validada para diagnóstico**: é
+apoio, como o restante do NeuroLaudo. Os detalhes e o que já foi conferido
+estão em `docs/VOLUMETRIA.md`.
+
+**Instalar o motor (uma vez).** É um programa à parte, de cerca de 2,5 GB, que
+fica em uma pasta só e não exige Xcode. Cole no Terminal e aguarde alguns
+minutos:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mateusbarbqueiroz-max/neurolaudo/main/mac/instalar-volumetria.sh)
+```
+
+No fim deve aparecer "Pronto. O motor de volumetria está em: …". Para remover,
+basta apagar essa pasta.
+
+**Usar.**
+
+1. Abra no IsiX a série **T1 volumétrica (3D) sem contraste** do exame.
+2. Menu **Plugins > Image Filters > Volumetria cerebral (pesquisa)…**.
+3. Aguarde alguns minutos. O IsiX continua utilizável enquanto isso.
+4. Ao terminar, aparece um resumo com a frase pronta para colar (botão
+   **Copiar**), e o exame ganha duas séries novas:
+   - **NeuroLaudo: volumetria (pesquisa)**: o relatório, com a tabela, os
+     percentis e os gráficos, e uma página de conferência;
+   - **NeuroLaudo: mapa da segmentação (pesquisa)**: o T1 com as estruturas
+     coloridas, corte a corte, que abre sozinho.
+5. **Confira o mapa antes de usar os números**: cada estrutura no lugar e do
+   lado certo. Hipocampo, amígdala e tálamo têm uma cor para cada lado
+   justamente para que uma troca de lado apareça.
+
+O comando recusa séries que não servem (TC, série com poucos cortes, FLAIR,
+difusão) e avisa quando o nome da série sugere contraste. A imagem não sai do
+Mac: o motor roda nele, e os arquivos temporários são apagados no fim.
 
 ## Opcional — trazer exames antigos
 
