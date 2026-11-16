@@ -275,8 +275,11 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
     private func finishVolumetry(_ outcome: MeasureOutcome, stored: VolumetryStored?, context: IsiXPluginContext) {
         if let stored {
             PluginLog.note("volumetria: concluída, relatório \(stored.reportSeriesUID ?? "-"), mapa \(stored.mapSeriesUID ?? "-")")
-            // Abre o mapa colorido, para conferir a segmentação ao lado do T1.
-            if let map = stored.mapSeriesUID { _ = try? context.database().openViewer(forSeries: map) }
+            // Abre o mapa colorido no corte do meio, para conferir a segmentação ao lado do T1.
+            if let map = stored.mapSeriesUID, let opened = try? context.database().openViewer(forSeries: map),
+               let count = try? opened.series().sliceCount, count > 1 {
+                try? opened.setCurrentSlice(count / 2)
+            }
         } else {
             PluginLog.note("volumetria: não concluída. \(outcome.text.prefix(300))")
         }

@@ -198,6 +198,7 @@ final class VolumetryTests: XCTestCase {
             let names = database.stubSeries.map { $0.seriesDescription ?? "" }
             XCTAssertTrue(names.contains(Volumetry.reportSeriesName) && names.contains(Volumetry.mapSeriesName))
             XCTAssertEqual(database.stubOpened.count, 1)
+            XCTAssertEqual(try harness.context.stubViewers.last?.series().currentSlice, 32)     // abre no meio
             let shown = try XCTUnwrap(harness.presenter.shown.last)
             XCTAssertTrue(shown.title.contains("Uso em pesquisa"))
             XCTAssertTrue(shown.text.contains("hipocampo esquerdo 3,7 mL") && shown.text.contains("Aviso de teste."))

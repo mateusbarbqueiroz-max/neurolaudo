@@ -1,7 +1,7 @@
 """Faz de conta que é o mri_synthseg: rótulos por limiar e por lado, volumes copiados de uma tabela.
 
 Só para testes do encanamento, com o fantoma. Não segmenta nada de verdade:
-- "substância branca" (2) onde o valor passa de 50;
+- "substância branca" (2) onde o valor passa de 50, com uma casca de "córtex" (3 e 42) em volta;
 - "hipocampo esquerdo" (17) e "direito" (53) onde passa de 150, conforme o lado do paciente;
 - a tabela de volumes vem de FAKE_VOLUMES ou de fake_volumes.csv ao lado deste arquivo.
 """
@@ -30,6 +30,13 @@ i, j, k = np.meshgrid(*[np.arange(n) for n in data.shape], indexing="ij")
 x = image.affine[0, 0] * i + image.affine[0, 1] * j + image.affine[0, 2] * k + image.affine[0, 3]
 labels = np.zeros(data.shape, np.int16)
 labels[data > 50] = 2
+# Uma casca de "córtex" (3 à esquerda, 42 à direita) em volta, para o mapa colorido ter o que mostrar.
+inside = data > 50
+core = inside.copy()
+for axis in range(3):
+    core &= np.roll(inside, 4, axis) & np.roll(inside, -4, axis)
+labels[inside & ~core & (x < 0)] = 3
+labels[inside & ~core & (x >= 0)] = 42
 labels[(data > 150) & (x < 0)] = 17      # x negativo em RAS = esquerda do paciente
 labels[(data > 150) & (x > 0)] = 53
 # Para testar o recorte que cresce: na primeira chamada, "córtex" encostado na primeira face do volume.
