@@ -16,7 +16,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 
 | Pendência | Quando | Importância |
 | --- | --- | --- |
-| Enviar ao autor do IsiX o aviso sobre a porta de comandos pelo canal privado que ele indicou (aba Security do repositório dele, "Report a vulnerability"). O texto está na conversa de 20/11/2026 | Quando puder; não precisa de Mac | Média: o autor já documentou o comportamento e avisa em vermelho; o aviso sugere mudar o padrão |
+| Enviar ao autor do IsiX o aviso sobre a porta de comandos por e-mail (o do perfil dele no GitHub) ou LinkedIn. A página "Report a vulnerability" dá erro 404: o relato privado não está ligado no repositório dele. O texto em português está na conversa de 20/11/2026 | Quando puder; não precisa de Mac | Média: o autor já documentou o comportamento e avisa em vermelho; o aviso sugere mudar o padrão |
 | Instalar o IsiX e o complemento e testar o botão do PACS, seguindo `docs/GUIA-INSTALACAO.md` (IsiX 6.0.6 ou mais novo). Se o IsiX disser que o pedido não foi enviado, conferir no link se está escrito `StudyInstanceUID` (na transcrição de 15/11 veio `StudyInstancrUID`) | Quando houver um Mac com macOS 15+ (amigo ou Mac novo) | Alta: é o teste da Etapa 1 |
 | Usar as medidas em um exame real, desenhando as linhas à mão (Evans, linha média, ABC/2), e abrir o painel do ASPECTS | Junto com o item acima | Média: o cálculo já foi conferido dentro do IsiX com marcas desenhadas pelo complemento; faltam o uso à mão e as telas |
 | Enviar os nomes das séries dos exames de rotina (RM de encéfalo e TC de crânio) | Quando puder; dá para ver no OsiriX MD atual | Média: ajusta os protocolos de exibição ao serviço |

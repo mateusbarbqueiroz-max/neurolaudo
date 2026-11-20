@@ -15,8 +15,10 @@ the latest version"). O que mudou, conferido no código da 6.0.6:
 
 Sobre a observação de segurança, o autor pediu que vá pelo canal privado do
 GitHub (aba Security do repositório dele, "Report a vulnerability"), ou por
-e-mail ou LinkedIn do perfil dele. O texto foi entregue ao usuário na conversa
-e não fica neste repositório público, por ser um aviso privado.
+e-mail ou LinkedIn do perfil dele. Em 20/11/2026 a página "Report a
+vulnerability" dava erro 404 (o relato privado não está ligado no repositório
+dele); o texto, em português, foi entregue ao usuário para enviar por e-mail. Ele
+não fica neste repositório público, por ser um aviso privado.
 
 A sessão do Claude não consegue abrir nem comentar pedidos no repositório do
 autor, nem ler os comentários pela API do GitHub; lê a página pública.

@@ -175,7 +175,9 @@ Em Settings > Listener escolhe-se quais dos três esquemas o IsiX abre.
   `execute = Delete` pede confirmação no Mac.
 - O autor pediu que observações de segurança vão pelo canal privado do GitHub
   (aba Security do repositório dele, "Report a vulnerability"), ou por e-mail ou
-  LinkedIn indicados no perfil dele.
+  LinkedIn indicados no perfil dele. Em 20/11/2026 o canal privado não estava
+  ligado no repositório (a página dá erro 404 e a aba Security só diz "No security
+  policy detected"); sobram o e-mail e o LinkedIn do perfil.
 
 ## Conferido no servidor Mac do GitHub (15/11/2026)
 
