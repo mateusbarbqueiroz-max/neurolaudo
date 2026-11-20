@@ -207,11 +207,21 @@ jobs:
 
       - name: Gerar o exame de teste (fantoma)
         run: |
-          python -m pip install --quiet numpy pydicom
+          python -m pip install --quiet numpy pydicom pynetdicom
           python engine/scripts/make_phantom.py "$RUNNER_TEMP/fantoma"
           python engine/scripts/make_phantom.py --rm "$RUNNER_TEMP/rm"
           python engine/scripts/make_phantom.py --t1 "$RUNNER_TEMP/t1"
+          # Um exame de RM que só o PACS de teste tem: é ele que o link do botão do PACS vai buscar.
+          python engine/scripts/make_phantom.py --rm "$RUNNER_TEMP/pacs"
+          echo "PACS_ESTUDO=$(python -c "import glob, pydicom; print(pydicom.dcmread(sorted(glob.glob('$RUNNER_TEMP/pacs/atual/01/*.dcm'))[0]).StudyInstanceUID)")" >> "$GITHUB_ENV"
           ls "$RUNNER_TEMP/fantoma" | wc -l
+
+      - name: PACS de teste (faz o papel do PACS do hospital)
+        run: |
+          nohup python engine/scripts/fake_pacs.py "$RUNNER_TEMP/pacs/atual" --ae PACSFALSO --porta 11112 \
+            --destino ISIXTESTE=127.0.0.1:11113 > "$SAIDA/pacs-de-teste.txt" 2>&1 &
+          sleep 5
+          cat "$SAIDA/pacs-de-teste.txt"
 
       - name: Motor de volumetria de mentira (testa o caminho do complemento, não a segmentação)
         run: |
@@ -231,7 +241,9 @@ jobs:
           EXE="$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
           "$EXE" -hideListenerError YES -moveToApplicationsFolderAlertSuppress YES \
             -DATABASELOCATION 1 -DATABASELOCATIONURL "$RAIZ" -DEFAULT_DATABASELOCATION 1 -DEFAULT_DATABASELOCATIONURL "$RAIZ" \
-            -AUTOCLEANINGSPACE NO -AUTOCLEANINGDATE NO -AUTOROUTINGACTIVATED NO -STORESCP NO -USESTORESCP NO \
+            -AUTOCLEANINGSPACE NO -AUTOCLEANINGDATE NO -AUTOROUTINGACTIVATED NO \
+            -STORESCP YES -AETITLE ISIXTESTE -AEPORT 11113 \
+            -SERVERS '({Activated = 1; AETitle = PACSFALSO; Address = "127.0.0.1"; Port = 11112; Description = "PACS de teste"; QR = 1; Send = 1; retrieveMode = 0; TransferSyntax = 0;})' \
             -publishDICOMBonjour NO -searchDICOMBonjour NO \
             -checkForUpdatesPlugins NO -SUEnableAutomaticChecks NO -httpXMLRPCServer YES -httpXMLRPCServerAccessScope 0 \
             -NeuroLaudoAutoteste YES -NeuroLaudoMotor "$RUNNER_TEMP/motor" \
@@ -347,14 +359,48 @@ jobs:
           screencapture -x "$SAIDA/7-volumetria-mapa.png" || echo "captura falhou"
           REGISTRO | grep -q "volumetria: concluída" && echo "VOLUMETRIA NO ISIX: OK" || echo "VOLUMETRIA NO ISIX: NÃO CONCLUÍDA"
 
+      - name: Botão do PACS simulado (link no formato do PACS do hospital)
+        run: |
+          source "$RUNNER_TEMP/ui.sh"
+          menu_clicar "Window" "Close All Viewers"
+          sleep 3
+          # Como o do hospital: ServerName com maiúscula, valores entre aspas, retrieveOnlyIfNeeded e then=Open.
+          # O nome do servidor é o AE title do PACS de teste; no IsiX a descrição dele é outra.
+          LINK="osirix://?methodName='Retrieve'&retrieveOnlyIfNeeded='yes'&ServerName='PACSFALSO'&filterKey='StudyInstanceUID'&filterValue='$PACS_ESTUDO'&then=Open"
+          echo "$LINK"
+          open "$LINK" || echo "open falhou"
+          sleep 5
+          echo "avisos aceitos: $(permitir)"
+          for i in $(seq 1 24); do
+            if grep -q "C-MOVE" "$SAIDA/pacs-de-teste.txt"; then break; fi
+            sleep 5
+          done
+          sleep 30
+          menu_clicar "Window" "Tile 2D Viewer Windows"
+          sleep 6
+          janelas
+          screencapture -x "$SAIDA/8-pacs-primeiro-clique.png" || echo "captura falhou"
+          ANTES=$(grep -c "C-MOVE" "$SAIDA/pacs-de-teste.txt" || true)
+          # Segundo clique no mesmo exame: ele já está completo no Mac e não deve ser buscado de novo.
+          open "$LINK" || echo "open falhou"
+          sleep 25
+          DEPOIS=$(grep -c "C-MOVE" "$SAIDA/pacs-de-teste.txt" || true)
+          janelas
+          screencapture -x "$SAIDA/9-pacs-segundo-clique.png" || echo "captura falhou"
+          echo "--- PACS de teste:"; cat "$SAIDA/pacs-de-teste.txt"
+          echo "BUSCAS NO PACS: depois do primeiro clique $ANTES, depois do segundo $DEPOIS"
+          log show --last 3m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' 2>/dev/null | grep -i "exame recebido" || echo "complemento: nada sobre exame recebido"
+
       - name: Registros
         if: always()
         run: |
           log show --last 20m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' > "$SAIDA/registro-neurolaudo.txt" 2>&1 || true
-          log show --last 20m --style compact --predicate 'process == "IsiX DICOM Viewer"' 2>/dev/null | grep -iE "plugin|neurolaudo|horos URL|exception" | tail -100 > "$SAIDA/registro-isix.txt" || true
+          log show --last 20m --style compact --predicate 'process == "IsiX DICOM Viewer"' 2>/dev/null | grep -iE "plugin|neurolaudo|horos URL|exception|xmlrpc|retrieve|link scheme|listener" | tail -150 > "$SAIDA/registro-isix.txt" || true
           echo "--- NeuroLaudo:"; tail -40 "$SAIDA/registro-neurolaudo.txt"
           echo "--- saída do IsiX (fim):"; tail -30 "$SAIDA/isix-saida.txt" || true
           echo "--- porta de comandos:"; grep -i "XML-RPC interface" "$SAIDA/isix-saida.txt" || echo "linha não encontrada"
+          echo "--- versão do IsiX:"; /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" || true
+          echo "--- IsiX, links e buscas:"; grep -iE "xmlrpc|retrieve|link scheme" "$SAIDA/registro-isix.txt" | tail -30 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
