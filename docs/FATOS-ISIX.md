@@ -255,3 +255,32 @@ exige a capacidade `database.import` no `Info.plist`.
   posição em milímetros) em que o T1 está, e os dois visualizadores mostram as mesmas coordenadas.
   A numeração dos cortes do mapa sai no sentido contrário ao do T1 (o IsiX ordena a série nova a
   seu modo), o que não atrapalha a correspondência por posição. Captura: `docs/volumetria-no-isix.png`.
+
+## Botão do PACS simulado, IsiX 6.0.6 (20/11/2026)
+
+No servidor Mac do GitHub, com um PACS de teste (`engine/scripts/fake_pacs.py`)
+guardando um exame de RM do fantoma que o IsiX não tinha. O IsiX foi aberto com
+o servidor cadastrado (descrição "PACS de teste", AE Title `PACSFALSO`) e com o
+receptor DICOM ligado (AE Title `ISIXTESTE`, porta 11113). O link foi aberto no
+formato do PACS do hospital, com `ServerName` maiúsculo, valores entre aspas e o
+nome do servidor igual ao AE Title (não à descrição):
+
+    osirix://?methodName='Retrieve'&retrieveOnlyIfNeeded='yes'&ServerName='PACSFALSO'
+        &filterKey='StudyInstanceUID'&filterValue='<exame de teste>'&then=Open
+
+- **Primeiro clique.** O IsiX consultou o PACS (C-FIND do exame, das 6 séries e
+  das imagens) e pediu o exame por C-MOVE; as 96 imagens chegaram ao receptor. O
+  IsiX abriu o exame sozinho: uma janela com a primeira série (AX FLAIR) e as 6
+  séries na coluna da esquerda (`docs/botao-pacs-simulado.png`).
+- **Complemento.** Registrou "exame recebido já estava aberto (pelo IsiX); nada
+  aberto pelo complemento": não houve janelas a mais.
+- **Segundo clique** no mesmo link. O IsiX consultou o PACS uma vez e não pediu o
+  exame de novo ("XMLRPC Retrieve: every study found is whole here; nothing is
+  retrieved"); o exame voltou a ser mostrado.
+
+Também nesta rodada: ao importar o relatório e o mapa da volumetria no exame, a
+abertura automática viu o exame já aberto e não abriu nada (antes da mudança,
+abriria de novo o protocolo daquele exame).
+
+Não conferido: o PACS do hospital (aparelho, rede, AE Titles reais) e o OsiriX MD
+disputando o botão no mesmo Mac.

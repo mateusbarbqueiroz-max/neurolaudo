@@ -6,12 +6,16 @@ O que eu conferi no código-fonte do IsiX: ele se registra para os links
 `osirix://` e aceita todos os comandos de link do OsiriX, inclusive o de baixar
 exames (`DownloadURL`).
 
-O que conferi em um Mac de verdade (servidor do GitHub, macOS 27): o IsiX abre,
-o instalador do complemento funciona, o IsiX carrega o complemento, e os
-comandos de Terminal do Passo 4 rodam sem erro.
+O que conferi em um Mac de verdade (servidor do GitHub, macOS 27, IsiX 6.0.6):
+o IsiX abre, o instalador do complemento funciona, o IsiX carrega o
+complemento, e os comandos de Terminal do Passo 4 rodam sem erro. Com um **PACS
+de teste** no lugar do PACS do hospital e um link no mesmo formato do seu (com
+`ServerName` maiúsculo e valores entre aspas), o IsiX buscou o exame do fantoma,
+abriu-o sozinho e, no segundo clique, não buscou de novo. A tela que apareceu
+está em `docs/botao-pacs-simulado.png`.
 
-O que **não** conferi: o seu PACS, o OsiriX MD disputando o botão e a busca do
-exame no servidor do hospital. Esse teste é o seu.
+O que **não** conferi: o seu PACS, a rede do hospital e o OsiriX MD disputando
+o botão no mesmo Mac. Esse teste é o seu.
 
 ## Passo 1 — Instalar o IsiX
 
@@ -112,7 +116,7 @@ O que pode acontecer:
 
 | Resultado | O que significa |
 | --- | --- |
-| O exame começa a chegar e abre sozinho logo que chega a primeira série; as outras continuam chegando | Funcionou. Quem abre é o próprio IsiX. Para arrumar as séries pelo protocolo de neuro: **Plugins > Database > Protocolo de neuro**. |
+| O exame começa a chegar e abre sozinho logo que chega a primeira série, com todas as séries na coluna da esquerda; as outras continuam chegando | Funcionou (é o que se vê em `docs/botao-pacs-simulado.png`). Quem abre é o próprio IsiX. Para arrumar as séries pelo protocolo de neuro: **Plugins > Database > Protocolo de neuro**. |
 | Clicar de novo no mesmo exame | Abre sem buscar de novo, porque o exame já está completo no Mac. |
 | Aviso de servidor não encontrado | O nome do servidor em Settings > Locations não é o mesmo do OsiriX MD (Passo 2). |
 | Aviso de que o pedido não foi enviado | O link pede algo que o IsiX não consegue buscar. Me avise, sem mandar o número do exame. |

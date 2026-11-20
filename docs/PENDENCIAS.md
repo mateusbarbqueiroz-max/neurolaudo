@@ -40,6 +40,9 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 - Pedido ao autor do IsiX atendido (18 e 19/11/2026): desde a 6.0.4 o link do botão do PACS
   funciona como está escrito (`ServerName`, `retrieveOnlyIfNeeded`, `then=Open`). O
   encaminhador de links deixou de ser necessário. Detalhes em `docs/PEDIDO-AO-ISIX.md`.
+- Botão do PACS simulado no servidor Mac com o IsiX 6.0.6 (20/11/2026): com um PACS de teste e um
+  link no formato do hospital, o IsiX buscou o exame, abriu-o sozinho e não buscou de novo no
+  segundo clique; o complemento não abriu janelas a mais (`docs/FATOS-ISIX.md`).
 
 - Volumetria (16/11/2026; números em `docs/VOLUMETRIA.md`):
   - o motor reproduz a referência nas estruturas grandes e tem ruído de 1 a 3 %, sem desvio, nas
