@@ -391,6 +391,17 @@ jobs:
           echo "BUSCAS NO PACS: depois do primeiro clique $ANTES, depois do segundo $DEPOIS"
           log show --last 3m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' 2>/dev/null | grep -i "exame recebido" || echo "complemento: nada sobre exame recebido"
 
+      - name: Nomes das séries (lista para ensinar o NeuroLaudo)
+        run: |
+          source "$RUNNER_TEMP/ui.sh"
+          /usr/bin/osascript -e 'tell application "IsiX DICOM Viewer" to activate' || true
+          sleep 2
+          plugin_clicar "Database" "Nomes das séries (para ensinar o NeuroLaudo)"
+          sleep 6
+          screencapture -x "$SAIDA/10-nomes-das-series.png" || echo "captura falhou"
+          clicar_isix "Fechar"
+          log show --last 2m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' 2>/dev/null | grep "nomes das séries" || echo "complemento: nada sobre nomes das séries"
+
       - name: Registros
         if: always()
         run: |

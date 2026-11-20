@@ -59,6 +59,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         static let protocolAuto = "protocolo-neuro"
         static let comparePrior = "comparar-anterior"
         static let autoOpenToggle = "abrir-ao-chegar"
+        static let seriesNames = "nomes-series"
         static let volumetry = "volumetria"
         static let about = "sobre"
         static let selfTest = "autoteste"
@@ -78,6 +79,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         Exames (menu Plugins › Database):
         • Protocolo de neuro: abre as séries do exame na ordem do protocolo.
         • Comparar com exame anterior: abre a série equivalente do exame anterior.
+        • Nomes das séries: lista os nomes de exame e de série do banco, sem dados de paciente, \
+        para copiar e mandar a quem mantém o NeuroLaudo; assim ele aprende os nomes do serviço.
         • Abrir exame ao chegar: liga ou desliga a abertura automática, pelo protocolo de neuro, \
         do exame que chega pela rede. Vem ligada. Se o próprio IsiX já abriu o exame (botão do PACS, \
         IsiX 6.0.4 ou mais novo), o complemento não abre outras janelas: use o Protocolo de neuro.
@@ -157,7 +160,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             }
         }
         // Prova de que o IsiX carregou e ativou o complemento; ver PluginLog.
-        let count = NeuroWindowPresets.ct.count + 9 + (selfTest ? 2 : 0)
+        let count = NeuroWindowPresets.ct.count + 10 + (selfTest ? 2 : 0)
         PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(count) comandos")
     }
 
@@ -254,6 +257,11 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
                 ? "Ligada: o exame que chegar pela rede abre arrumado pelo protocolo de neuro, se o IsiX ainda não o tiver aberto."
                 : "Desligada: os exames chegam ao banco de dados e não abrem sozinhos."
             self.presenter?.show(MeasureOutcome(title: "Abertura automática", text: text), in: invocation.parentWindow)
+        }
+        try context.register(IsiXCommand(id: Command.seriesNames, title: "Nomes das séries (para ensinar o NeuroLaudo)",
+                                         placement: .database, requirement: .none)) { [weak self] invocation in
+            guard let self, let context = self.context else { return }
+            self.presenter?.show(try SeriesNames.outcome(database: try context.database()), in: invocation.parentWindow)
         }
         // O exame que chega (por exemplo, pelo botão do PACS) abre sozinho.
         eventObservation = try context.observe([.imagesAdded]) { [weak self] event in

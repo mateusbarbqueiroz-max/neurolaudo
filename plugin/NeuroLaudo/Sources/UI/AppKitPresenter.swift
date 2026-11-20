@@ -24,7 +24,23 @@ import AppKit
     func show(_ outcome: MeasureOutcome, in window: NSWindow?) {
         let alert = NSAlert()
         alert.messageText = outcome.title
-        alert.informativeText = outcome.text
+        if outcome.text.count > 900 {
+            // Texto longo (lista de séries, por exemplo): numa área que rola, para o aviso caber na tela.
+            alert.informativeText = "Use Copiar para levar o texto inteiro."
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 560, height: 340))
+            scroll.hasVerticalScroller = true
+            scroll.borderType = .bezelBorder
+            let view = NSTextView(frame: scroll.contentView.bounds)
+            view.isEditable = false
+            view.isSelectable = true
+            view.font = NSFont.monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+            view.string = outcome.text
+            view.autoresizingMask = [.width]
+            scroll.documentView = view
+            alert.accessoryView = scroll
+        } else {
+            alert.informativeText = outcome.text
+        }
         alert.addButton(withTitle: "Copiar")
         alert.addButton(withTitle: "Fechar")
         let text = outcome.text

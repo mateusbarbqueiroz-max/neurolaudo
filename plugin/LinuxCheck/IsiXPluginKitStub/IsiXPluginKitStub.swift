@@ -752,11 +752,14 @@ public struct IsiXStudyQuery: Hashable, Sendable {
     public func selectedStudies() throws -> [IsiXStudy] { stubSelection.studies }
 
     public func studies(matching query: IsiXStudyQuery) throws -> [IsiXStudy] {
-        stubStudies.filter { study in
+        // Como o kit: a modalidade é a de alguma série do exame; `limit` traz os mais novos primeiro.
+        let found = stubStudies.filter { study in
             if let uid = query.studyInstanceUID, study.studyInstanceUID != uid { return false }
             if let patient = query.patientID, study.patientID != patient { return false }
+            if let modality = query.modality, !study.modalities.contains(modality) { return false }
             return true
-        }
+        }.sorted { ($0.studyDate ?? .distantPast) > ($1.studyDate ?? .distantPast) }
+        return query.limit.map { Array(found.prefix($0)) } ?? found
     }
 
     public func study(withInstanceUID uid: String) throws -> IsiXStudy? {
