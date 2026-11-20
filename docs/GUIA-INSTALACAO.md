@@ -131,7 +131,10 @@ O que pode acontecer:
    crânio), como aparecem na lista do visualizador, por exemplo `AX FLAIR`,
    `DWI b1000`, `ADC`, `SWI`, `SAG T1 MPRAGE`. São nomes de protocolo, não
    dados de paciente. Preciso deles para o IsiX já abrir o exame arrumado para
-   neuro.
+   neuro. Com o IsiX em uso, o jeito mais fácil é o menu **Plugins > Database >
+   Nomes das séries (para ensinar o NeuroLaudo)**: ele junta os nomes de exame e
+   de série do banco, sem dados de paciente, e o botão **Copiar** leva o texto
+   para colar na conversa.
 
 ## Passo 7 — Instalar o complemento NeuroLaudo
 
@@ -145,7 +148,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/mateusbarbqueiroz-max/neurol
 
 Abra o IsiX. Em **Plugins > Plugins Manager** deve aparecer o NeuroLaudo. Os
 comandos ficam nos menus **Plugins > Image Filters** (janelas), **Plugins > ROI
-Tools** (medidas) e **Plugins > Database** (protocolo e comparação). A ajuda
+Tools** (medidas) e **Plugins > Database** (protocolo, comparação e nomes das séries). A ajuda
 está em **Plugins > Others > NeuroLaudo: ajuda**.
 
 O complemento também abre sozinho, com as séries arrumadas pelo protocolo de
