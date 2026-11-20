@@ -1,12 +1,25 @@
 # Pedido ao autor do IsiX DICOM Viewer
 
-Situação: **enviado pelo usuário em 16/11/2026**, como
+Situação: **atendido**. Enviado pelo usuário em 16/11/2026, como
 [ThalesMMS/IsiX-DICOM-Viewer-macOS#48](https://github.com/ThalesMMS/IsiX-DICOM-Viewer-macOS/issues/48).
-Conferido no mesmo dia: aberto, com o texto abaixo, ainda sem resposta.
+O autor respondeu em 18/11 ("Working on it now") e em 19/11 ("Please update to
+the latest version"). O que mudou, conferido no código da 6.0.6:
+
+- 6.0.4: os nomes dos parâmetros valem em qualquer caixa (`ServerName` funciona);
+  `retrieveOnlyIfNeeded=yes` não busca um exame que já está completo no Mac;
+  `then=open` (ou `display`) abre o exame assim que chega a primeira série.
+- 6.0.5: o esquema `isix://`; o IsiX avisa ao abrir quando outro programa abre os
+  links `osirix://` e oferece tomá-los de volta; a espera do `then=open` vira um
+  ajuste oculto (`XMLRPCRetrieveOpenWaitSeconds`, 30 s).
+- Detalhes em `docs/FATOS-ISIX.md`, seção do link do botão do PACS.
+
+Sobre a observação de segurança, o autor pediu que vá pelo canal privado do
+GitHub (aba Security do repositório dele, "Report a vulnerability"), ou por
+e-mail ou LinkedIn do perfil dele. O texto foi entregue ao usuário na conversa
+e não fica neste repositório público, por ser um aviso privado.
 
 A sessão do Claude não consegue abrir nem comentar pedidos no repositório do
-autor (só age em repositórios onde o usuário pode gravar). O GitHub avisa o
-usuário por e-mail quando houver resposta; o Claude consegue ler o pedido.
+autor, nem ler os comentários pela API do GitHub; lê a página pública.
 
 Não há dado de paciente nem nome de servidor no texto.
 

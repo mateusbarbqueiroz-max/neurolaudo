@@ -1,6 +1,6 @@
 # Pendências
 
-Atualizado em 16/11/2026.
+Atualizado em 20/11/2026.
 
 ## Situação do Mac
 
@@ -16,10 +16,8 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 
 | Pendência | Quando | Importância |
 | --- | --- | --- |
-| Conferir se o link do botão do PACS traz `ServerName` ou `serverName` | Quando puder ver o código da página do PACS | Alta: com S maiúsculo o IsiX recusa o pedido |
-| Avisar o Claude quando o autor do IsiX responder ao pedido [ThalesMMS/IsiX-DICOM-Viewer-macOS#48](https://github.com/ThalesMMS/IsiX-DICOM-Viewer-macOS/issues/48), enviado em 16/11/2026 | Quando chegar o e-mail do GitHub | Alta: resolve na origem o `then=Open` e o `ServerName` |
-| Quando o autor indicar um contato, enviar em particular o aviso sobre a porta de comandos (o Claude entrega o texto) | Depois da resposta do autor | Alta: é um ponto de segurança, não vai em pedido público |
-| Instalar o IsiX e o complemento e testar o botão do PACS, seguindo `docs/GUIA-INSTALACAO.md` | Quando houver um Mac com macOS 15+ (amigo ou Mac novo) | Alta: é o teste da Etapa 1 |
+| Enviar ao autor do IsiX o aviso sobre a porta de comandos pelo canal privado que ele indicou (aba Security do repositório dele, "Report a vulnerability"). O texto está na conversa de 20/11/2026 | Quando puder; não precisa de Mac | Média: o autor já documentou o comportamento e avisa em vermelho; o aviso sugere mudar o padrão |
+| Instalar o IsiX e o complemento e testar o botão do PACS, seguindo `docs/GUIA-INSTALACAO.md` (IsiX 6.0.6 ou mais novo). Se o IsiX disser que o pedido não foi enviado, conferir no link se está escrito `StudyInstanceUID` (na transcrição de 15/11 veio `StudyInstancrUID`) | Quando houver um Mac com macOS 15+ (amigo ou Mac novo) | Alta: é o teste da Etapa 1 |
 | Usar as medidas em um exame real, desenhando as linhas à mão (Evans, linha média, ABC/2), e abrir o painel do ASPECTS | Junto com o item acima | Média: o cálculo já foi conferido dentro do IsiX com marcas desenhadas pelo complemento; faltam o uso à mão e as telas |
 | Enviar os nomes das séries dos exames de rotina (RM de encéfalo e TC de crânio) | Quando puder; dá para ver no OsiriX MD atual | Média: ajusta os protocolos de exibição ao serviço |
 | Conferir os valores das janelas de TC (encéfalo 40/80, AVC 40/40, subdural 75/215, osso 600/2800, angio-TC 200/700, partes moles 50/350) | Quando puder | Média |
@@ -31,7 +29,6 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 
 | Pendência | Depende de |
 | --- | --- |
-| Encaminhador de links, se o link usar `ServerName` e o autor do IsiX não atender | resposta do usuário e do autor |
 | Protocolos de exibição nativos do IsiX configurados para neuro | nomes das séries |
 | Volumetria em exame real: ajustar o que o primeiro teste no Mac mostrar (tempo, memória, nomes de série) | teste do usuário no Mac novo |
 | Volumetria: ver se as notas automáticas de qualidade cabem na memória do Mac novo e, se couberem, oferecê-las como conferência extra | Mac novo |
@@ -39,6 +36,10 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Laudo | etapas anteriores |
 
 ## Feito
+
+- Pedido ao autor do IsiX atendido (18 e 19/11/2026): desde a 6.0.4 o link do botão do PACS
+  funciona como está escrito (`ServerName`, `retrieveOnlyIfNeeded`, `then=Open`). O
+  encaminhador de links deixou de ser necessário. Detalhes em `docs/PEDIDO-AO-ISIX.md`.
 
 - Volumetria (16/11/2026; números em `docs/VOLUMETRIA.md`):
   - o motor reproduz a referência nas estruturas grandes e tem ruído de 1 a 3 %, sem desvio, nas

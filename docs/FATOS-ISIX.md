@@ -122,37 +122,60 @@ Formato (o identificador do exame e o nome do servidor não ficam no repositóri
     osirix://?methodName=Retrieve&retrieveOnlyIfNeeded=yes&ServerName=XXX
         &filterKey=StudyInstanceUID&filterValue=XXX&then=Open
 
-O que o IsiX 6.0.3 faz com cada parte (`Horos/Sources/XMLRPCInterface+Retrieve.swift`,
-`Horos/Sources/HorosSchemeURL.swift`):
+O que o IsiX faz com cada parte (`Horos/Sources/XMLRPCInterface+Retrieve.swift`,
+`Horos/Sources/HorosSchemeURL.swift`, `Horos/Sources/RISRequestServers.swift`).
+A coluna da direita vale a partir da 6.0.4, feita pelo autor depois do pedido
+[ThalesMMS/IsiX-DICOM-Viewer-macOS#48](https://github.com/ThalesMMS/IsiX-DICOM-Viewer-macOS/issues/48)
+(lido no código da 6.0.6, commit `c6a718f`, e no README do IsiX):
 
-| Parte | No IsiX |
-| --- | --- |
-| `methodName=Retrieve` | Aceito; o nome do comando não diferencia maiúsculas |
-| `filterKey=StudyInstanceUID` | Aceito (até nove filtros) |
-| Aspas em volta dos valores | Removidas |
-| `serverName` | Lido exatamente assim; `ServerName` dá "server name is empty" (erro 400) |
-| `retrieveOnlyIfNeeded` | Ignorado: busca de novo |
-| `then=Open` | Ignorado: o exame chega e não abre |
-| `retrieveMode` | Aceito (opcional) |
+| Parte | 6.0.3 | 6.0.4 em diante |
+| --- | --- | --- |
+| `methodName=Retrieve` | aceito | aceito; o nome `methodName` é escrito exatamente assim |
+| Aspas em volta dos valores | removidas | removidas |
+| `ServerName` / `serverName` | só `serverName`; `ServerName` dava "server name is empty" | os nomes dos parâmetros valem em qualquer caixa |
+| Nome do servidor | igual à descrição em Locations | a descrição em Locations ou o AE Title do servidor, exatos ou sem diferença de caixa |
+| `filterKey=StudyInstanceUID` | aceito (até nove filtros) | aceito; o nome do atributo tem de estar escrito certo, senão o pedido não é enviado |
+| `retrieveOnlyIfNeeded=yes` | ignorado: buscava de novo | não busca o exame que já está completo no Mac (compara com o número de imagens que o servidor informa; se o servidor não informa, busca) |
+| `then=Open` | ignorado: o exame chegava e não abria | abre o exame assim que chega a primeira série (confere a cada meio segundo, espera até 30 s, ajustável em `XMLRPCRetrieveOpenWaitSeconds`); `then=select` só seleciona na lista |
+| `retrieveMode` | aceito (opcional) | aceito (opcional) |
 
 A busca é DICOM (C-FIND e depois C-MOVE ou C-GET): o servidor precisa estar em
-Settings > Locations com o mesmo nome, e o AE Title do IsiX é o destino do C-MOVE.
+Settings > Locations, e o AE Title do IsiX é o destino do C-MOVE.
 
-O complemento supre o `then=Open` (`plugin/NeuroLaudo/Sources/Glue/AutoOpen.swift`).
-Os outros dois pontos dependem do autor do IsiX (`docs/PEDIDO-AO-ISIX.md`) ou de
-um encaminhador de links.
+Desde a 6.0.4, quem abre o exame do link é o próprio IsiX. A abertura automática
+do complemento (`plugin/NeuroLaudo/Sources/Glue/AutoOpen.swift`) espera 3 s depois
+do fim do recebimento e não abre nada se o exame já estiver aberto; continua
+valendo para exames que chegam sem link.
+
+Desde a 6.0.5 o IsiX também declara o esquema `isix://`. Ao abrir, se os links
+estão ligados e outro programa (o OsiriX MD, por exemplo) abre os links
+`osirix://`, ele mostra um painel "Another application opens the links of IsiX
+DICOM Viewer", com os botões **Make IsiX the Default** e **Not Now** e as opções
+**Always at startup** e **Don't ask again** (`Horos/Sources/LinkSchemeStartupCheck.swift`).
+Em Settings > Listener escolhe-se quais dos três esquemas o IsiX abre.
 
 ## Porta de comandos (XML-RPC)
 
-- Ligar o suporte a URL liga também um servidor HTTP na porta 8080.
+- Uma só opção, **Activate the URL support and HTTP XML-RPC Server on port**, liga
+  os links e um servidor HTTP na porta 8080.
 - Valor de fábrica de `httpXMLRPCServerAccessScope`: `2` (qualquer endereço), sem
-  senha. Registro de uma instalação nova: "answering this Mac and any address,
-  WITHOUT a password". O README do IsiX diz que o padrão é só este Mac.
-- Valores: `0` só este Mac, `1` rede local, `2` qualquer endereço
-  (`Horos/Sources/XMLRPCServerAccess.swift`).
-- Com `0`, o registro passa a "answering this Mac only". Os links `osirix://`
-  continuam funcionando, porque são abertos no próprio Mac.
-- `FindObject` devolve o conteúdo do banco, com nomes e identificadores de pacientes.
+  senha. Registro de uma instalação nova (6.0.3, servidor Mac): "answering this Mac
+  and any address, WITHOUT a password". Na 6.0.6 o valor de fábrica continua `2`
+  (`Modules/IsiXPreferences/Sources/NetworkPreferences.swift`); agora o README do
+  IsiX o descreve, e o painel Listener avisa em vermelho.
+- Valores: `0` só este Mac, `1` rede local, `2` qualquer endereço. No painel:
+  **Answer messages from** → **This Mac only**, **Computers on the local network**,
+  **Any address**; e **Require a user name and password from other computers**.
+- Com `0`, o registro passa a "answering this Mac only". Os links continuam
+  funcionando: chegam ao IsiX como evento do próprio Mac, sem passar pelo servidor
+  (o README do IsiX recomenda **This Mac only** para quem só usa links).
+- O servidor publica `dbwindowfind` (o conteúdo do banco, com nomes e
+  identificadores de pacientes), `DownloadURL`, `Retrieve` e `KillOsiriX`. Na 6.0.6,
+  pedidos vindos de páginas da internet são recusados e `FindObject` com
+  `execute = Delete` pede confirmação no Mac.
+- O autor pediu que observações de segurança vão pelo canal privado do GitHub
+  (aba Security do repositório dele, "Report a vulnerability"), ou por e-mail ou
+  LinkedIn indicados no perfil dele.
 
 ## Conferido no servidor Mac do GitHub (15/11/2026)
 

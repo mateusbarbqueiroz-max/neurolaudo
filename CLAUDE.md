@@ -96,5 +96,11 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
   - A biblioteca `surfa` só existe em código-fonte: a versão compilada para Mac fica na versão `motor`
     do repositório, publicada pelo próprio teste.
   - O IsiX abre a série nova no mesmo corte (posição) em que a série de origem está.
+- IsiX 6.0.4 em diante abre sozinho o exame de um link com `then=Open` e aceita `ServerName`
+  em qualquer caixa (`docs/FATOS-ISIX.md`). A API do GitHub não alcança o repositório do autor
+  (nem para ler o pedido 48): ler a página pública com o agente web-fetch e o código com `git fetch`
+  em `/home/user/refs/isix`.
+- Botão do PACS sem hospital: `engine/scripts/fake_pacs.py` é um PACS de teste (C-FIND com número
+  de imagens, C-MOVE); `isix.yml` o usa com um link no formato do hospital.
 - O matplotlib desta sessão usa a fonte Inter por configuração local; as páginas fixam DejaVu Sans
   para saírem iguais em qualquer máquina.
