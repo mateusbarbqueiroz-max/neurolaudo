@@ -17,8 +17,8 @@ Sobre a observação de segurança, o autor pediu que vá pelo canal privado do
 GitHub (aba Security do repositório dele, "Report a vulnerability"), ou por
 e-mail ou LinkedIn do perfil dele. Em 20/11/2026 a página "Report a
 vulnerability" dava erro 404 (o relato privado não está ligado no repositório
-dele); o texto, em português, foi entregue ao usuário para enviar por e-mail. Ele
-não fica neste repositório público, por ser um aviso privado.
+dele); o texto, em português, foi enviado pelo usuário por e-mail em 20/11/2026.
+Ele não fica neste repositório público, por ser um aviso privado.
 
 A sessão do Claude não consegue abrir nem comentar pedidos no repositório do
 autor, nem ler os comentários pela API do GitHub; lê a página pública.
