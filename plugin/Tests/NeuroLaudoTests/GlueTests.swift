@@ -13,6 +13,7 @@ import IsiXPluginKit
     init(selfTest: Bool = false) throws {
         plugin.presenter = presenter
         plugin.settings = settings
+        plugin.autoOpenDelay = 0
         if selfTest { settings.set(true, forKey: SelfTest.settingsKey) }
         try plugin.activate(with: context)
     }

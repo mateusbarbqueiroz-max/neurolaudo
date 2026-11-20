@@ -78,8 +78,9 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         Exames (menu Plugins › Database):
         • Protocolo de neuro: abre as séries do exame na ordem do protocolo.
         • Comparar com exame anterior: abre a série equivalente do exame anterior.
-        • Abrir exame ao chegar: liga ou desliga a abertura automática do exame que chega \
-        pelo botão do PACS. Vem ligada.
+        • Abrir exame ao chegar: liga ou desliga a abertura automática, pelo protocolo de neuro, \
+        do exame que chega pela rede. Vem ligada. Se o próprio IsiX já abriu o exame (botão do PACS, \
+        IsiX 6.0.4 ou mais novo), o complemento não abre outras janelas: use o Protocolo de neuro.
 
         Volumetria cerebral (menu Plugins › Image Filters), com a série T1 volumétrica sem contraste aberta: \
         mede hipocampos, amígdalas, tálamos, ventrículos, córtex e substância branca, compara com adultos \
@@ -95,6 +96,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
     var presenter: Presenting?
     /// Onde ficam as opções. Trocado pelos testes; por padrão, as preferências do IsiX.
     var settings: SettingsStore?
+    /// Espera da abertura automática (ver AutoOpen). Os testes usam zero.
+    var autoOpenDelay: TimeInterval = AutoOpen.defaultDelay
     private var eventObservation: IsiXObservation?
     private var autoOpen: AutoOpen?
     /// Quem roda a volumetria. Trocado pelos testes; por padrão, o motor instalado no Mac.
@@ -109,7 +112,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         self.context = context
         if presenter == nil { presenter = PresenterFactory.make() }
         let store = settings ?? DefaultsStore()
-        autoOpen = AutoOpen(store: store)
+        autoOpen = AutoOpen(store: store, delay: autoOpenDelay)
 
         try registerWindowCommands(context)
         try registerMeasureCommands(context)
@@ -248,7 +251,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             guard let self, let autoOpen = self.autoOpen else { return }
             autoOpen.isEnabled.toggle()
             let text = autoOpen.isEnabled
-                ? "Ligada: o exame que chegar sozinho pela rede abre já arrumado pelo protocolo de neuro."
+                ? "Ligada: o exame que chegar pela rede abre arrumado pelo protocolo de neuro, se o IsiX ainda não o tiver aberto."
                 : "Desligada: os exames chegam ao banco de dados e não abrem sozinhos."
             self.presenter?.show(MeasureOutcome(title: "Abertura automática", text: text), in: invocation.parentWindow)
         }
