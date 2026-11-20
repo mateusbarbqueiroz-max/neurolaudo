@@ -341,7 +341,8 @@ enum Volumetry {
             let imported = try database.importFiles(at: files)
             guard imported.failures.isEmpty, let uid = imported.seriesInstanceUIDs.first else {
                 let reason = imported.failures.first?.reason ?? "nenhuma série criada"
-                throw PluginFailure("O IsiX não importou \(isReport ? "o relatório" : "o mapa colorido") (\(reason)).")
+                let partial = stored.reportSeriesUID != nil ? " O relatório já foi gravado no exame; só o mapa faltou." : ""
+                throw PluginFailure("O IsiX não importou \(isReport ? "o relatório" : "o mapa colorido") (\(reason))." + partial)
             }
             if isReport { stored.reportSeriesUID = uid } else { stored.mapSeriesUID = uid }
         }

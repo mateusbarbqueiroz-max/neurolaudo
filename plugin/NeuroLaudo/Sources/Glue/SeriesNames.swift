@@ -8,8 +8,9 @@ import Foundation
 import IsiXPluginKit
 
 @MainActor enum SeriesNames {
-    /// Exames lidos por modalidade, os mais recentes.
-    static let studiesPerModality = 300
+    /// Exames lidos por modalidade, os mais recentes. A leitura é feita na janela do IsiX, que fica
+    /// parada enquanto isso; 150 exames de cada bastam para ver as variações de nome de um serviço.
+    static let studiesPerModality = 150
 
     static func collect(database: IsiXDatabase, limit: Int = studiesPerModality) throws
         -> (entries: [CatalogEntry], studies: [CatalogStudy]) {
@@ -34,7 +35,10 @@ import IsiXPluginKit
     static func outcome(database: IsiXDatabase) throws -> MeasureOutcome {
         let found = try collect(database: database)
         let text = SeriesCatalog.report(found.entries, studies: found.studies, limitPerModality: studiesPerModality)
-        let names = Set(found.entries.map { $0.modality + "|" + $0.seriesDescription.lowercased() }).count
+        // Mesma contagem da lista: nomes iguais a menos de espaços e caixa contam uma vez.
+        let names = SeriesCatalog.modalities.reduce(0) { total, modality in
+            total + SeriesCatalog.counts(found.entries.filter { $0.modality == modality.code }.map(\.seriesDescription)).count
+        }
         let read = { (code: String) in found.studies.filter { $0.modality == code }.count }
         PluginLog.note("nomes das séries: \(read("MR")) exame(s) de RM, \(read("CT")) de TC, \(names) nome(s) de série")
         return MeasureOutcome(title: "Nomes das séries", text: text)

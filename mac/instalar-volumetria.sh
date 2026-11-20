@@ -20,13 +20,16 @@ REPO="mateusbarbqueiroz-max/neurolaudo"
 FS_RAW="https://raw.githubusercontent.com/freesurfer/freesurfer/v8.2.0"
 ANNEX="https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/repo/annex.git/annex/objects"
 RODAS="https://github.com/$REPO/releases/download/motor"
+UV_VERSAO="0.13.8"
 
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64)
     UV_ASSET="uv-aarch64-apple-darwin.tar.gz"
+    UV_SOMA="6b71028a6b904f2ae3340ef52e595512de807d06c0a20eaef2f692581b246558"
     PADRAO="$HOME/Library/Application Support/NeuroLaudo/motor" ;;
   Linux-x86_64)
     UV_ASSET="uv-x86_64-unknown-linux-gnu.tar.gz"
+    UV_SOMA="5acfd9177cfecf0bf87578f059728215ccc884388988f55f7a65041b57387d91"
     PADRAO="$HOME/.local/share/neurolaudo/motor" ;;
   *)
     echo "Este instalador é para Mac com Apple Silicon (ou Linux de 64 bits, para teste). Aqui: $(uname -s) $(uname -m)." >&2
@@ -59,8 +62,10 @@ echo "Instalando o motor de volumetria em: $MOTOR"
 
 echo "1/5  Python próprio do motor"
 if [ ! -x "$MOTOR/bin/uv" ]; then
+  # Versão fixa do uv, conferida pela soma publicada pela Astral para ela.
   rm -rf "$MOTOR/uv-tmp" && mkdir -p "$MOTOR/uv-tmp"
-  curl -fL --retry 3 -sS "https://github.com/astral-sh/uv/releases/latest/download/$UV_ASSET" | tar -xz -C "$MOTOR/uv-tmp"
+  baixar "https://github.com/astral-sh/uv/releases/download/$UV_VERSAO/$UV_ASSET" "$MOTOR/uv-tmp/$UV_ASSET" "$UV_SOMA"
+  tar -xzf "$MOTOR/uv-tmp/$UV_ASSET" -C "$MOTOR/uv-tmp"
   mv "$MOTOR"/uv-tmp/*/uv "$MOTOR/bin/uv"
   rm -rf "$MOTOR/uv-tmp"
 fi
@@ -80,8 +85,13 @@ if [ -n "${NEUROLAUDO_SURFA:-}" ]; then
 elif [ "$(uname -s)" = "Darwin" ]; then
   # A surfa só existe em código-fonte e exigiria um compilador. O projeto publica uma já compilada.
   mkdir -p "$MOTOR/rodas"
-  RODA="$(curl -fL --retry 3 -sS "$RODAS/surfa-macos-arm64.txt" | tr -d '[:space:]')"
-  curl -fL --retry 3 -sS -o "$MOTOR/rodas/$RODA" "$RODAS/$RODA"
+  # O arquivo de texto traz o nome do arquivo e a soma SHA-256 dele, gravados por quem o compilou.
+  read -r RODA RODA_SOMA <<< "$(curl -fL --retry 3 -sS "$RODAS/surfa-macos-arm64.txt")"
+  if [ -z "${RODA:-}" ] || [ -z "${RODA_SOMA:-}" ]; then
+    echo "A peça surfa publicada não traz a soma de conferência. Nada foi instalado dela; avise quem mantém o NeuroLaudo." >&2
+    exit 1
+  fi
+  baixar "$RODAS/$RODA" "$MOTOR/rodas/$RODA" "$RODA_SOMA"
   "$UV" pip install --quiet --python "$PY" "$MOTOR/rodas/$RODA"
 else
   "$UV" pip install --quiet --python "$PY" "surfa==0.6.3"

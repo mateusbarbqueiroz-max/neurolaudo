@@ -20,6 +20,7 @@ from pathlib import Path
 
 from pydicom import dcmread
 from pydicom.dataset import Dataset
+from pydicom.multival import MultiValue
 from pynetdicom import AE, StoragePresentationContexts, evt
 from pynetdicom.sop_class import (PatientRootQueryRetrieveInformationModelFind,
                                   PatientRootQueryRetrieveInformationModelMove,
@@ -85,11 +86,12 @@ class Archive:
                 if have is None:
                     ok = False
                     break
-                values = [str(v) for v in value] if isinstance(value, (list, tuple)) or getattr(value, "VM", 1) > 1 \
-                    else [str(value)]
-                text = str(have)
-                if not any(fnmatch.fnmatchcase(text, v.replace("?", "?")) if ("*" in v or "?" in v) else text == v
-                           for v in values):
+                # Valores múltiplos (MultiValue do pydicom ou lista calculada, como ModalitiesInStudy): casa se
+                # algum valor pedido casar com algum valor do exame.
+                values = [str(v) for v in value] if isinstance(value, (list, tuple, MultiValue)) else [str(value)]
+                texts = [str(h) for h in have] if isinstance(have, (list, tuple, MultiValue)) else [str(have)]
+                if not any(fnmatch.fnmatchcase(text, v) if ("*" in v or "?" in v) else text == v
+                           for v in values for text in texts):
                     ok = False
                     break
             if ok:

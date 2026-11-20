@@ -58,15 +58,17 @@ enum SeriesCatalog {
         lines.append("Exames lidos: \(read) (os mais recentes, até \(limitPerModality) de cada).")
         for (code, title) in modalities {
             let mine = entries.filter { $0.modality.uppercased() == code }
+            let studiesHere = studies.filter { $0.modality.uppercased() == code }
             lines.append("")
             lines.append(title)
-            guard !mine.isEmpty else {
-                lines.append("  nenhuma série de \(title) no banco")
-                continue
-            }
-            let names = counts(studies.filter { $0.modality.uppercased() == code }.map(\.description))
+            let names = counts(studiesHere.map(\.description))
             if !names.isEmpty {
                 lines.append("Nomes de exame: " + names.map { "\($0.name) (\($0.count))" }.joined(separator: " · "))
+            }
+            guard !mine.isEmpty else {
+                lines.append(studiesHere.isEmpty ? "  nenhuma série de \(title) no banco"
+                                                 : "  nenhuma série de imagens de \(title) nos exames lidos")
+                continue
             }
             lines.append("Séries (vezes) → como o NeuroLaudo reconhece hoje:")
             for item in counts(mine.map(\.seriesDescription)) {

@@ -105,12 +105,16 @@ jobs:
           # compilador, então o projeto publica a versão já compilada, que o instalador baixa.
           sw_vers; uname -m; sysctl -n hw.memsize hw.ncpu
           mkdir -p "$RUNNER_TEMP/roda" && cd "$RUNNER_TEMP/roda"
-          curl -fL -sS https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-apple-darwin.tar.gz | tar -xz
+          curl -fL -sS https://github.com/astral-sh/uv/releases/download/0.13.8/uv-aarch64-apple-darwin.tar.gz -o uv.tar.gz
+          echo "6b71028a6b904f2ae3340ef52e595512de807d06c0a20eaef2f692581b246558  uv.tar.gz" | shasum -a 256 -c -
+          tar -xzf uv.tar.gz
           UV="$PWD/uv-aarch64-apple-darwin/uv"
           "$UV" venv --quiet --seed --python-preference only-managed --python 3.11 venv
           venv/bin/python -m pip wheel --quiet --no-deps "surfa==0.6.3" -w rodas
           RODA="$(basename rodas/surfa-*.whl)"
-          echo "$RODA" > rodas/surfa-macos-arm64.txt
+          # Nome e soma SHA-256: o instalador confere o arquivo antes de instalar.
+          echo "$RODA $(shasum -a 256 "rodas/$RODA" | cut -d' ' -f1)" > rodas/surfa-macos-arm64.txt
+          cat rodas/surfa-macos-arm64.txt
           ls -la rodas
           if ! gh release view motor >/dev/null 2>&1; then
             gh release create motor --title "Peças do motor de volumetria" --prerelease --latest=false \
@@ -170,6 +174,10 @@ jobs:
             if [ -f "$f" ]; then cp "$f" "${{ matrix.nome }}-recorte-$(basename "$f")"; fi
           done
           ls -la
+          # As duas máquinas podem chegar aqui juntas: se a outra criou a versão antes, a criação falha e tudo bem.
+          gh release view teste-volumetria >/dev/null 2>&1 || gh release create teste-volumetria \
+            --title "Teste da volumetria (automático)" --prerelease --latest=false \
+            --notes "Resultado do último teste automático da volumetria em um exame público (banco IXI, CC BY-SA 3.0). Nenhum dado de paciente. Uso em pesquisa, não validado para diagnóstico." || true
           if [ -n "$(ls -A .)" ]; then gh release upload teste-volumetria ./* --clobber; fi
 
   diagnostico:
@@ -209,5 +217,8 @@ jobs:
           if [ -f "$RUNNER_TEMP/diagnostico.txt" ]; then
             cp "$RUNNER_TEMP/diagnostico.txt" linux-diagnostico.txt
             lscpu | grep -E "Model name" >> linux-diagnostico.txt
+            gh release view teste-volumetria >/dev/null 2>&1 || gh release create teste-volumetria \
+              --title "Teste da volumetria (automático)" --prerelease --latest=false \
+              --notes "Resultado do último teste automático da volumetria em um exame público (banco IXI, CC BY-SA 3.0). Nenhum dado de paciente. Uso em pesquisa, não validado para diagnóstico." || true
             gh release upload teste-volumetria linux-diagnostico.txt --clobber
           fi

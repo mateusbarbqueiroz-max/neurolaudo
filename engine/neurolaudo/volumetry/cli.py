@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import sys
 
 from neurolaudo.volumetry.norms import assess, load_norms
@@ -96,6 +97,10 @@ def _add_header_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--serie", help="descrição da série usada")
 
 
+def _stop(signum, frame) -> None:
+    raise SystemExit(128 + signum)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="neurolaudo-volumetria", description="Volumetria cerebral com percentis por idade e sexo.")
     commands = parser.add_subparsers(dest="comando", required=True)
@@ -122,6 +127,9 @@ def main(argv: list[str] | None = None) -> int:
     check = commands.add_parser("verificar", help="diz se o motor de segmentação está instalado")
     check.set_defaults(run=run_check_command)
     args = parser.parse_args(argv)
+    # Cancelar no IsiX encerra este programa (SIGTERM). Sem isto o SynthSeg, que roda em outro processo,
+    # continuaria sozinho por muitos minutos. Como exceção, o subprocess.run em andamento encerra o SynthSeg.
+    signal.signal(signal.SIGTERM, _stop)
     try:
         return args.run(args)
     except (ValueError, OSError, RuntimeError) as error:

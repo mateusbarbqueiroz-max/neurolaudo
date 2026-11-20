@@ -30,10 +30,17 @@ import AppKit
             let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 560, height: 340))
             scroll.hasVerticalScroller = true
             scroll.borderType = .bezelBorder
-            let view = NSTextView(frame: scroll.contentView.bounds)
+            let view = NSTextView(frame: NSRect(origin: .zero, size: scroll.contentSize))
             view.isEditable = false
             view.isSelectable = true
             view.font = NSFont.monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+            // Cresce para baixo com o texto, para a área rolar até o fim.
+            view.minSize = NSSize(width: 0, height: scroll.contentSize.height)
+            view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+            view.isVerticallyResizable = true
+            view.isHorizontallyResizable = false
+            view.textContainer?.containerSize = NSSize(width: scroll.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+            view.textContainer?.widthTracksTextView = true
             view.string = outcome.text
             view.autoresizingMask = [.width]
             scroll.documentView = view

@@ -41,6 +41,9 @@ BAND_NARROW = "#3987e5"
 MEDIAN = "#0d366b"
 ALERT = "#d03b3b"
 
+# Altura mínima (fração da página) até onde descem os avisos, para sobrar lugar para os gráficos.
+WARNINGS_FLOOR = 0.40
+
 SHORT_TITLES = {
     "hippocampus_left": "Hipocampo E",
     "hippocampus_right": "Hipocampo D",
@@ -213,9 +216,18 @@ def build_figure(assessment: Assessment, header: ReportHeader, notes=(), footnot
     except (KeyError, ValueError):
         pass
     cursor -= 0.021
-    # Avisos do exame: perto da tabela, onde são lidos. Os gráficos encolhem para dar lugar.
-    for warning in list(assessment.warnings) + list(notes):
-        for n, piece in enumerate(textwrap.wrap(warning, 112)):
+    # Avisos do exame: perto da tabela, onde são lidos. Os gráficos encolhem para dar lugar, até um limite:
+    # o que não couber fica só na lista de avisos da tela do NeuroLaudo (resultado.json).
+    warnings = list(assessment.warnings) + list(notes)
+    for index, warning in enumerate(warnings):
+        pieces = textwrap.wrap(warning, 112)
+        if cursor - 0.0145 * (len(pieces) + 1) < WARNINGS_FLOOR:
+            fig.text(left, cursor, "!", fontsize=8, color=ALERT, va="top", fontweight="bold")
+            fig.text(left + 0.012, cursor, f"Mais {len(warnings) - index} aviso(s): veja a lista completa na tela do NeuroLaudo.",
+                     fontsize=8, color=INK, va="top")
+            cursor -= 0.0165
+            break
+        for n, piece in enumerate(pieces):
             if n == 0:
                 fig.text(left, cursor, "!", fontsize=8, color=ALERT, va="top", fontweight="bold")
             fig.text(left + 0.012, cursor, piece, fontsize=8, color=INK, va="top")
