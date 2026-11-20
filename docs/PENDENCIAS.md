@@ -18,7 +18,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | --- | --- | --- |
 | Instalar o IsiX e o complemento e testar o botão do PACS, seguindo `docs/GUIA-INSTALACAO.md` (IsiX 6.0.6 ou mais novo). Se o IsiX disser que o pedido não foi enviado, conferir no link se está escrito `StudyInstanceUID` (na transcrição de 15/11 veio `StudyInstancrUID`) | Quando houver um Mac com macOS 15+ (amigo ou Mac novo) | Alta: é o teste da Etapa 1 |
 | Usar as medidas em um exame real, desenhando as linhas à mão (Evans, linha média, ABC/2), e abrir o painel do ASPECTS | Junto com o item acima | Média: o cálculo já foi conferido dentro do IsiX com marcas desenhadas pelo complemento; faltam o uso à mão e as telas |
-| Enviar os nomes das séries dos exames de rotina (RM de encéfalo e TC de crânio) e o arranjo desejado na tela | Agora, pelo OsiriX MD (página explicativa com formulário entregue na conversa de 20/11/2026), ou, com o Mac novo, pelo comando Plugins > Database > Nomes das séries | Média: com eles o IsiX já abre o exame do botão arrumado para neuro |
+| Mandar ao Claude os nomes das séries do serviço: com os exames reais já no IsiX, abrir **Plugins > Database > Nomes das séries (para ensinar o NeuroLaudo)**, tocar em **Copiar** e colar na conversa. Junto, dizer como gosta de ver a RM de encéfalo e a TC de crânio na tela (quantas janelas e qual série em cada) | Quando o Mac novo chegar e os primeiros exames tiverem passado pelo botão do PACS. Dá para adiantar pelo OsiriX MD, com a página explicativa entregue na conversa de 20/11/2026 | Média: com isso o IsiX passa a abrir o exame do botão já arrumado para neuro, e os nomes não reconhecidos são ensinados ao NeuroLaudo |
 | Conferir os valores das janelas de TC (encéfalo 40/80, AVC 40/40, subdural 75/215, osso 600/2800, angio-TC 200/700, partes moles 50/350) | Quando puder | Média |
 | Ver os exemplos da volumetria (`docs/exemplo-volumetria.png`, `docs/exemplo-conferencia.png`, `docs/volumetria-no-isix.png`) e dizer o que mudar: estruturas, ordem, cores, palavras, frase para o laudo | Quando puder; não precisa de Mac | Média: é a hora mais barata de mudar |
 | Instalar o motor de volumetria (Passo 8 do guia) e rodar em um T1 volumétrico; conferir o mapa colorido e contar o tempo que levou | Quando houver o Mac novo | Alta para a volumetria: é o primeiro teste em exame real |
@@ -28,7 +28,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 
 | Pendência | Depende de |
 | --- | --- |
-| Protocolos de exibição nativos do IsiX configurados para neuro | nomes das séries |
+| Com a lista do comando Nomes das séries: ensinar ao NeuroLaudo os nomes "não reconhecidos" e configurar os protocolos de exibição do IsiX para neuro | a lista colada pelo usuário |
 | Volumetria em exame real: ajustar o que o primeiro teste no Mac mostrar (tempo, memória, nomes de série) | teste do usuário no Mac novo |
 | Volumetria: ver se as notas automáticas de qualidade cabem na memória do Mac novo e, se couberem, oferecê-las como conferência extra | Mac novo |
 | Volumetria: comparação com o exame anterior do mesmo paciente (mudança de volume no tempo) | opinião do usuário sobre o relatório |
