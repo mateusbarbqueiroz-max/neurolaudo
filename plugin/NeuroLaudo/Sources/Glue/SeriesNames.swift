@@ -12,14 +12,13 @@ import IsiXPluginKit
     static let studiesPerModality = 300
 
     static func collect(database: IsiXDatabase, limit: Int = studiesPerModality) throws
-        -> (entries: [CatalogEntry], studyCounts: [String: Int]) {
+        -> (entries: [CatalogEntry], studies: [CatalogStudy]) {
         var entries: [CatalogEntry] = []
-        var studyCounts: [String: Int] = [:]
+        var studies: [CatalogStudy] = []
         for (code, _) in SeriesCatalog.modalities {
-            let studies = try database.studies(matching: IsiXStudyQuery(modality: code, limit: limit))
-            studyCounts[code] = studies.count
-            for study in studies {
+            for study in try database.studies(matching: IsiXStudyQuery(modality: code, limit: limit)) {
                 let description = study.studyDescription ?? ""
+                studies.append(CatalogStudy(modality: code, description: description))
                 for series in try database.series(inStudy: study.studyInstanceUID) {
                     let modality = (series.modality ?? "").uppercased()
                     let name = series.seriesDescription ?? ""
@@ -29,15 +28,15 @@ import IsiXPluginKit
                 }
             }
         }
-        return (entries, studyCounts)
+        return (entries, studies)
     }
 
     static func outcome(database: IsiXDatabase) throws -> MeasureOutcome {
         let found = try collect(database: database)
-        let text = SeriesCatalog.report(found.entries, studyCounts: found.studyCounts, limitPerModality: studiesPerModality)
+        let text = SeriesCatalog.report(found.entries, studies: found.studies, limitPerModality: studiesPerModality)
         let names = Set(found.entries.map { $0.modality + "|" + $0.seriesDescription.lowercased() }).count
-        PluginLog.note("nomes das séries: \(found.studyCounts["MR"] ?? 0) exame(s) de RM, "
-            + "\(found.studyCounts["CT"] ?? 0) de TC, \(names) nome(s) de série")
+        let read = { (code: String) in found.studies.filter { $0.modality == code }.count }
+        PluginLog.note("nomes das séries: \(read("MR")) exame(s) de RM, \(read("CT")) de TC, \(names) nome(s) de série")
         return MeasureOutcome(title: "Nomes das séries", text: text)
     }
 }

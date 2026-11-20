@@ -14,6 +14,12 @@ struct CatalogEntry: Equatable, Sendable {
     var seriesDescription: String
 }
 
+/// Um exame do banco, só com o que a lista usa: a modalidade em que foi lido e o nome do exame.
+struct CatalogStudy: Equatable, Sendable {
+    var modality: String
+    var description: String
+}
+
 enum SeriesCatalog {
     /// Modalidades listadas, na ordem em que aparecem no texto.
     static let modalities: [(code: String, title: String)] = [("MR", "RM"), ("CT", "TC")]
@@ -42,11 +48,13 @@ enum SeriesCatalog {
         .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name.lowercased() < $1.name.lowercased() }
     }
 
-    /// O texto pronto para copiar. `studyCounts`: quantos exames de cada modalidade foram lidos.
-    static func report(_ entries: [CatalogEntry], studyCounts: [String: Int], limitPerModality: Int) -> String {
+    /// O texto pronto para copiar. `studies`: um item por exame lido, para contar os nomes de exame.
+    static func report(_ entries: [CatalogEntry], studies: [CatalogStudy], limitPerModality: Int) -> String {
         var lines = ["Nomes das séries no banco do IsiX",
                      "Só nomes de exame e de série, sem dados de paciente. Confira antes de mandar."]
-        let read = modalities.map { "\(studyCounts[$0.code] ?? 0) de \($0.title)" }.joined(separator: " e ")
+        let read = modalities.map { code, title in
+            "\(studies.filter { $0.modality.uppercased() == code }.count) de \(title)"
+        }.joined(separator: " e ")
         lines.append("Exames lidos: \(read) (os mais recentes, até \(limitPerModality) de cada).")
         for (code, title) in modalities {
             let mine = entries.filter { $0.modality.uppercased() == code }
@@ -56,9 +64,9 @@ enum SeriesCatalog {
                 lines.append("  nenhuma série de \(title) no banco")
                 continue
             }
-            let studies = counts(mine.map(\.studyDescription))
-            if !studies.isEmpty {
-                lines.append("Nomes de exame: " + studies.map { "\($0.name) (\($0.count))" }.joined(separator: " · "))
+            let names = counts(studies.filter { $0.modality.uppercased() == code }.map(\.description))
+            if !names.isEmpty {
+                lines.append("Nomes de exame: " + names.map { "\($0.name) (\($0.count))" }.joined(separator: " · "))
             }
             lines.append("Séries (vezes) → como o NeuroLaudo reconhece hoje:")
             for item in counts(mine.map(\.seriesDescription)) {

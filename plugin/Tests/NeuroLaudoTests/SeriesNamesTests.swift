@@ -16,9 +16,12 @@ final class SeriesNamesTests: XCTestCase {
             CatalogEntry(modality: "MR", studyDescription: "RM CRANIO", seriesDescription: "Apparent Diffusion Coefficient (mm²/s)"),
             CatalogEntry(modality: "MR", studyDescription: "RM ENCEFALO", seriesDescription: "sequencia_xyz_123"),
         ]
-        let text = SeriesCatalog.report(entries, studyCounts: ["MR": 3, "CT": 0], limitPerModality: 300)
+        // Três exames: dois "RM ENCEFALO" (um deles com duas séries) e um "RM CRANIO". Conta exames, não séries.
+        let studies = [CatalogStudy(modality: "MR", description: "RM ENCEFALO"), CatalogStudy(modality: "MR", description: "RM ENCEFALO"),
+                       CatalogStudy(modality: "MR", description: "RM CRANIO")]
+        let text = SeriesCatalog.report(entries, studies: studies, limitPerModality: 300)
         XCTAssertTrue(text.contains("Exames lidos: 3 de RM e 0 de TC (os mais recentes, até 300 de cada)."))
-        XCTAssertTrue(text.contains("Nomes de exame: RM ENCEFALO (3) · RM CRANIO (1)"))
+        XCTAssertTrue(text.contains("Nomes de exame: RM ENCEFALO (2) · RM CRANIO (1)"))
         XCTAssertTrue(text.contains("  t2_tirm_tra_dark-fluid (2) → FLAIR"))
         XCTAssertTrue(text.contains("  Apparent Diffusion Coefficient (mm²/s) (1) → ADC"))
         XCTAssertTrue(text.contains("  sequencia_xyz_123 (1) → não reconhecida"))
@@ -50,6 +53,7 @@ final class SeriesNamesTests: XCTestCase {
             XCTAssertTrue(shown.text.contains("  SAG T1 MPRAGE (1) → T1"))
             XCTAssertTrue(shown.text.contains("  CRANIO 5mm (1) → TC parênquima"))
             XCTAssertTrue(shown.text.contains("Nomes de exame: TC CRANIO (1)"))
+            XCTAssertTrue(shown.text.contains("Nomes de exame: RM ENCEFALO (1)"))       // um exame, duas séries
             for secret in ["FULANO", "PRONT-98765", "ACC-55555", "1.2.3.4", "1.2.3.5", "9.1", "NeuroLaudo:", "Dose Report", "2023"] {
                 XCTAssertFalse(shown.text.contains(secret), "não pode aparecer: \(secret)")
             }
