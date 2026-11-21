@@ -115,11 +115,13 @@ jobs:
           if [ -n "$(ls -A .)" ]; then gh release upload teste-lesoes ./* --clobber; fi
 
   original:
-    # O programa original num exame inteiro, comparado com a versão por fatias no mesmo exame. Ele passa de 16 GB:
-    # roda com memória extra em disco (troca), mais devagar. Mostra se as duas dão o mesmo resultado do começo ao fim.
+    # Confere a versão por fatias contra o programa original num exame inteiro, onde a rede original passa de 16 GB
+    # (com memória extra em disco, o servidor caiu). Em duas partes: (1) o inference.py original, sem mudança, com a
+    # rede trocada pela por fatias, confere todo o resto do caminho; (2) a rede original e a por fatias num bloco
+    # de 128 x 160 x 128 mm do mesmo exame, onde a original cabe na memória.
     if: inputs.etapa == 'original'
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    timeout-minutes: 90
     env:
       EXAME: sub-13192/ses-OXF1PRI001/anat/sub-13192_ses-OXF1PRI001_T2w.nii.gz
     steps:
@@ -127,15 +129,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Memória extra em disco
-        run: |
-          df -h / /mnt || true
-          LIVRE=$(df --output=avail -BG /mnt 2>/dev/null | tail -1 | tr -dc 0-9); LIVRE=${LIVRE:-0}
-          if [ "$LIVRE" -ge 45 ]; then TROCA=/mnt/troca; else TROCA=/troca; LIVRE=$(df --output=avail -BG / | tail -1 | tr -dc 0-9); fi
-          TAM=$(( LIVRE - 6 < 40 ? LIVRE - 6 : 40 ))
-          sudo swapoff -a || true
-          sudo fallocate -l "${TAM}G" "$TROCA" && sudo chmod 600 "$TROCA" && sudo mkswap "$TROCA" >/dev/null && sudo swapon "$TROCA"
-          free -g
       - name: Instalar o PyTorch e o WMH-SynthSeg
         run: |
           python -m pip install --quiet "torch==$TORCH" --index-url https://download.pytorch.org/whl/cpu
@@ -154,17 +147,20 @@ jobs:
             --i "$RUNNER_TEMP/exame.nii.gz" --o "$RUNNER_TEMP/fatias-seg.nii.gz" --csv "$RUNNER_TEMP/fatias.csv" \
             > "$RUNNER_TEMP/saida/original-fatias-registro.txt" 2>&1
           grep -E "lesões|Elapsed|Maximum resident" "$RUNNER_TEMP/saida/original-fatias-registro.txt"
-      - name: Programa original
-        timeout-minutes: 280
+      - name: Programa original com a rede por fatias
         run: |
-          export FREESURFER_HOME="$RUNNER_TEMP/wmh/fs"
-          ( while true; do free -m | awk '/Swap/ {print $3}' >> "$RUNNER_TEMP/troca.txt"; sleep 5; done ) &
-          /usr/bin/time -v python "$RUNNER_TEMP/wmh/inference.py" --i "$RUNNER_TEMP/exame.nii.gz" \
-            --o "$RUNNER_TEMP/original-seg.nii.gz" --csv_vols "$RUNNER_TEMP/original.csv" --threads -1 --crop \
-            > "$RUNNER_TEMP/saida/original-registro.txt" 2>&1 || echo "o original falhou"
-          echo "troca máxima usada: $(sort -n "$RUNNER_TEMP/troca.txt" | tail -1) MB" | tee -a "$RUNNER_TEMP/saida/original-registro.txt"
-          grep -E "Elapsed|Maximum resident|Error|Killed" "$RUNNER_TEMP/saida/original-registro.txt"
+          python engine/scripts/wmh_lowmem.py --codigo "$RUNNER_TEMP/wmh" \
+            --modelo "$RUNNER_TEMP/wmh/fs/models/WMH-SynthSeg_v10_231110.pth" --original \
+            --i "$RUNNER_TEMP/exame.nii.gz" --o "$RUNNER_TEMP/original-seg.nii.gz" --csv "$RUNNER_TEMP/original.csv" \
+            > "$RUNNER_TEMP/saida/original-registro.txt" 2>&1 || echo "falhou"
+          tail -12 "$RUNNER_TEMP/saida/original-registro.txt"
+      - name: Rede original e por fatias num bloco do exame
+        run: |
+          python engine/scripts/wmh_lowmem.py --codigo "$RUNNER_TEMP/wmh" \
+            --modelo "$RUNNER_TEMP/wmh/fs/models/WMH-SynthSeg_v10_231110.pth" --conferir --i "$RUNNER_TEMP/exame.nii.gz" \
+            2>&1 | tee "$RUNNER_TEMP/saida/original-conferencia.txt"
       - name: Comparar
+        if: always()
         run: |
           python - "$RUNNER_TEMP/original-seg.nii.gz" "$RUNNER_TEMP/fatias-seg.nii.gz" "$RUNNER_TEMP/original.csv" "$RUNNER_TEMP/fatias.csv" \
             <<'EOF2' | tee "$RUNNER_TEMP/saida/original-comparacao.txt"
@@ -173,7 +169,8 @@ jobs:
           import numpy as np
           a, b = nib.load(sys.argv[1]), nib.load(sys.argv[2])
           A, B = np.asanyarray(a.dataobj), np.asanyarray(b.dataobj)
-          print("exame: ON-Harmony sub-13192, Siemens Prisma (OXF1PRI001), FLAIR 3D; o mesmo arquivo nas duas versões")
+          print("exame: ON-Harmony sub-13192, Siemens Prisma (OXF1PRI001), FLAIR 3D, inteiro")
+          print("original = inference.py do FreeSurfer 8.2 sem mudança, com a rede trocada pela por fatias")
           print("forma", A.shape, B.shape, "| mesma posição no espaço:", bool(np.allclose(a.affine, b.affine, atol=1e-4)))
           if A.shape == B.shape:
               print(f"mesmo rótulo em {100 * (A == B).mean():.4f} % dos voxels")

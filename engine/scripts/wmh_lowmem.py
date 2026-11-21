@@ -5,11 +5,13 @@ estruturas do encéfalo em FLAIR (ou outro contraste). O programa original calcu
 precisou de mais de 16 GB no servidor do GitHub. Aqui cada convolução é feita em fatias de poucos cortes, com
 um corte de borda de cada lado; a normalização de grupo (GroupNorm) usa a média e a variância do volume
 inteiro, como na rede original, calculadas antes das fatias. O resultado tem de ser o mesmo, a menos de
-arredondamento; `--conferir` compara com a rede original em um volume pequeno.
+arredondamento; `--conferir` compara com a rede original em volumes pequenos (com `--i`, também num bloco
+do exame) e `--original` roda o inference.py original inteiro, só com a rede trocada por esta.
 
 Uso:
-  python wmh_lowmem.py --codigo PASTA --modelo ARQ.pth --conferir
+  python wmh_lowmem.py --codigo PASTA --modelo ARQ.pth --conferir [--i FLAIR.nii.gz]
   python wmh_lowmem.py --codigo PASTA --modelo ARQ.pth --i FLAIR.nii.gz --o SEG.nii.gz --csv VOL.csv [--threads N]
+  python wmh_lowmem.py --codigo PASTA --modelo ARQ.pth --original --i FLAIR.nii.gz --o SEG.nii.gz --csv VOL.csv
 
 PASTA: a pasta WMHSynthSeg do FreeSurfer 8.2 (inference.py, utils.py, unet3d/), de onde vêm a rede e o
 pré-processamento, sem mudança.
@@ -212,7 +214,8 @@ def figure(path, image, seg, title):
     plt.close(fig)
 
 
-def segment(torch, model, utils, path_in, path_out, csv_path, figure_path=None, json_path=None):
+def prepare(torch, utils, path_in):
+    """Leitura, alinhamento, normalização para [0, 1] e reamostragem para 1 mm, como no inference.py original."""
     image, aff = utils.MRIread(path_in)
     image_torch = torch.tensor(np.squeeze(image).astype(float))
     while len(image_torch.shape) > 3:
@@ -226,6 +229,11 @@ def segment(torch, model, utils, path_in, path_out, csv_path, figure_path=None, 
     for j in range(3):
         aff_up[:-1, j] = aff_up[:-1, j] / factors[j]
     aff_up[:-1, -1] = aff_up[:-1, -1] - np.matmul(aff_up[:-1, :-1], 0.5 * (factors - 1))
+    return upscaled, aff_up
+
+
+def segment(torch, model, utils, path_in, path_out, csv_path, figure_path=None, json_path=None):
+    upscaled, aff_up = prepare(torch, utils, path_in)
 
     # Recorte de 192 × 224 × 192 centrado no encéfalo, como no original com --crop: passo preliminar no volume
     # centrado, centro de massa de tálamos e ventrículos laterais.
@@ -306,23 +314,81 @@ def segment(torch, model, utils, path_in, path_out, csv_path, figure_path=None, 
     return wmh
 
 
-def check(torch, model):
-    """Compara com a rede original em volumes pequenos (a original cabe na memória neles)."""
+def real_block(torch, utils, path_in, size=(128, 160, 128)):
+    """Bloco do exame (já como a rede o recebe) centrado no centro de massa da imagem; zeros onde faltar."""
+    from scipy import ndimage
+    upscaled, _ = prepare(torch, utils, path_in)
+    centre = ndimage.center_of_mass(upscaled.numpy())
+    block = torch.zeros(size)
+    src, dst = [], []
+    for n, s, c in zip(upscaled.shape, size, centre):
+        a = int(min(max(0, round(c) - s // 2), max(0, n - s)))
+        b = min(n, a + s)
+        src.append(slice(a, b))
+        dst.append(slice(0, b - a))
+    block[tuple(dst)] = upscaled[tuple(src)]
+    return block
+
+
+def check(torch, model, utils=None, path_in=None):
+    """Compara com a rede original em volumes pequenos (a original cabe na memória neles): dois de ruído e, com
+    `path_in`, um bloco do exame de verdade."""
     gen = torch.Generator().manual_seed(7)
     worst = 0.0
+    volumes = []
     for shape in ((64, 96, 64), (96, 64, 96)):
         volume = torch.rand(shape, generator=gen)
         volume[:8] = 0                      # fundo de zeros, como o enchimento do volume real
+        volumes.append(("ruído", volume))
+    if path_in:
+        volumes.append(("exame", real_block(torch, utils, path_in)))
+    for kind, volume in volumes:
+        shape = tuple(volume.shape)
         with torch.no_grad():
             reference = model(volume[None, None])[0, :N_LABELS]
             mine = logits(torch, model, volume)
         diff = (reference - mine).abs().max().item()
+        scale = reference.abs().max().item()
         same = (reference.argmax(0) == mine.argmax(0)).float().mean().item()
-        worst = max(worst, diff)
-        print(f"conferência {shape}: maior diferença nas saídas {diff:.2e} (escala {reference.abs().max().item():.1f}); "
+        worst = max(worst, diff / max(1.0, scale))      # relativa: o arredondamento cresce com a escala das saídas
+        print(f"conferência {shape} ({kind}): maior diferença nas saídas {diff:.2e} (escala {scale:.1f}); "
               f"mesmo rótulo em {100 * same:.4f} % dos voxels", flush=True)
-    print("CONFERÊNCIA: " + ("IGUAL À ORIGINAL (só arredondamento)" if worst < 1e-2 else "DIFERENTE"), flush=True)
-    return worst < 1e-2
+        if kind == "exame":
+            wmh = LABELS.index(77)
+            a, b = reference.argmax(0) == wmh, mine.argmax(0) == wmh
+            print(f"lesões no bloco do exame: rede original {int(a.sum())} voxels, por fatias {int(b.sum())}, "
+                  f"nas duas {int((a & b).sum())}", flush=True)
+        del reference, mine
+    print("CONFERÊNCIA: " + ("IGUAL À ORIGINAL (só arredondamento)" if worst < 1e-3 else "DIFERENTE"), flush=True)
+    return worst < 1e-3
+
+
+def run_original(torch, code, args) -> int:
+    """O inference.py original, sem mudar nada nele, com a rede trocada pela versão por fatias. Confere num exame
+    inteiro todo o resto do caminho (leitura, recorte, espelhamento, volumes), onde a rede original não cabe na
+    memória. Os 6 canais finais da rede não entram na segmentação e vão zerados."""
+    import os
+    import runpy
+    from pathlib import Path
+    import unet3d.model as unet_model
+
+    class SlabUNet3D(unet_model.UNet3D):
+        def forward(self, x):
+            with torch.no_grad():
+                out = logits(torch, self, x[0, 0])
+            extra = torch.zeros((self.final_conv.out_channels - N_LABELS,) + tuple(out.shape[1:]))
+            return torch.cat([out, extra])[None]
+
+    unet_model.UNet3D = SlabUNet3D
+    os.environ.setdefault("FREESURFER_HOME", str(Path(args.modelo).resolve().parent.parent))
+    sys.argv = ["inference.py", "--i", args.i, "--o", args.o, "--crop", "--threads", str(args.threads or -1)]
+    if args.csv:
+        sys.argv += ["--csv_vols", args.csv]
+    runpy.run_path(str(Path(code) / "inference.py"), run_name="__main__")
+    ok = Path(args.o).exists()
+    print(f"original com a rede por fatias: {'segmentação gravada' if ok else 'falhou'}; memória máxima {peak_gb():.1f} GB",
+          flush=True)
+    return 0 if ok else 1
 
 
 def main(argv=None) -> int:
@@ -336,12 +402,15 @@ def main(argv=None) -> int:
     parser.add_argument("--json")
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--conferir", action="store_true")
+    parser.add_argument("--original", action="store_true")
     args = parser.parse_args(argv)
     sys.path.insert(0, args.codigo)
     import torch
     import utils  # noqa: E402  (do WMH-SynthSeg)
     from unet3d.model import UNet3D  # noqa: E402
 
+    if args.original:
+        return run_original(torch, args.codigo, args)
     if args.threads > 0:
         torch.set_num_threads(args.threads)
     print(f"torch {torch.__version__}, {torch.get_num_threads()} núcleos, oneDNN "
@@ -352,7 +421,7 @@ def main(argv=None) -> int:
     model.eval()
     with torch.no_grad():
         if args.conferir:
-            return 0 if check(torch, model) else 1
+            return 0 if check(torch, model, utils, args.i) else 1
         segment(torch, model, utils, args.i, args.o, args.csv, args.figura, args.json)
     return 0
 
