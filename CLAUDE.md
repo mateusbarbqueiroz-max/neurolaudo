@@ -52,6 +52,8 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
   - `scripts/`: fantomas (`make_phantom.py`, `--rm`, `--t1`), validação e diagnóstico da volumetria.
 - `mac/`: scripts para o Mac do usuário (`instalar.sh`, `botao-pacs.sh`, `instalar-volumetria.sh`).
 - `docs/VOLUMETRIA.md`: como a volumetria funciona, o que foi medido e o que falta conferir.
+- `docs/LESOES-FLAIR.md`: estudo das lesões no FLAIR (WMH-SynthSeg). O original passa de 16 GB;
+  `engine/scripts/wmh_lowmem.py` calcula a mesma rede por fatias (cerca de 6 GB). `lesoes.yml`.
 
 ## Comandos
 
