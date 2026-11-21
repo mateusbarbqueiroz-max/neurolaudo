@@ -9,8 +9,11 @@ name: Lesões no FLAIR (estudo)
 on:
   workflow_dispatch:
     inputs:
+      etapa:
+        description: "viabilidade (2 exames) ou repeticao (20 voluntários em vários aparelhos)"
+        default: "viabilidade"
       onde:
-        description: "linux, mac ou ambos"
+        description: "viabilidade: linux, mac ou ambos"
         default: "ambos"
 
 permissions:
@@ -28,6 +31,7 @@ env:
 
 jobs:
   viabilidade:
+    if: inputs.etapa != 'repeticao'
     strategy:
       fail-fast: false
       matrix:
@@ -109,3 +113,90 @@ jobs:
           gh release view teste-lesoes >/dev/null 2>&1 || gh release create teste-lesoes --title "Teste das lesões no FLAIR (automático)" \
             --prerelease --latest=false --notes "Estudo de viabilidade da medida de lesões de substância branca no FLAIR, em exames públicos (ON-Harmony, CC0). Nenhum dado de paciente. Uso em pesquisa." || true
           if [ -n "$(ls -A .)" ]; then gh release upload teste-lesoes ./* --clobber; fi
+
+  repeticao:
+    # Repetição do volume de lesões: ON-Harmony, 20 voluntários em 6 aparelhos de 3 T e 10 deles mais 5 vezes no
+    # mesmo aparelho. Uma pessoa por servidor; o FLAIR 3D se chama T2w ou FLAIR conforme o aparelho.
+    if: inputs.etapa == 'repeticao'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        pessoa: ["03286", "03997", "10975", "12813", "13192", "13305", "14221", "14229", "14230", "14482",
+                 "15320", "16745", "16766", "16793", "16794", "16841", "16842", "16974", "16975", "16981"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instalar o PyTorch e o WMH-SynthSeg
+        run: |
+          python -m pip install --quiet "torch==$TORCH" --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --quiet "numpy<2" nibabel scipy h5py matplotlib
+          W="$RUNNER_TEMP/wmh"
+          mkdir -p "$W/unet3d" "$W/fs/models"
+          for f in inference.py utils.py unet3d/__init__.py unet3d/model.py unet3d/buildingblocks.py unet3d/se.py unet3d/utils.py; do
+            curl -fsSL --retry 3 -o "$W/$f" "$FS_RAW/$f"
+          done
+          curl -fsSL --retry 3 -o "$W/fs/models/WMH-SynthSeg_v10_231110.pth" "$MODELO"
+      - name: Medir cada sessão
+        run: |
+          P="sub-${{ matrix.pessoa }}"
+          mkdir -p "$RUNNER_TEMP/saida" "$RUNNER_TEMP/flair"
+          for SES in $(curl -fsS --retry 3 "https://s3.amazonaws.com/openneuro.org?list-type=2&prefix=ds004712/$P/ses-&delimiter=/" \
+                       | grep -o "<Prefix>ds004712/$P/ses-[^<]*" | sed "s#.*/ses-##; s#/##"); do
+            F=""
+            for NOME in T2w FLAIR; do
+              if curl -fsSL --retry 3 -o "$RUNNER_TEMP/flair/$SES.nii.gz" "$S3/$P/ses-$SES/anat/${P}_ses-${SES}_${NOME}.nii.gz" 2>/dev/null; then
+                F="$NOME"; break
+              fi
+            done
+            if [ -z "$F" ]; then echo "$SES: sem FLAIR"; continue; fi
+            DESC="$(curl -fsS --retry 3 "$S3/$P/ses-$SES/anat/${P}_ses-${SES}_${F}.json" \
+                    | python -c "import json,sys; d=json.load(sys.stdin); print(d.get('SeriesDescription'), 'TI', d.get('InversionTime'))" || echo "?")"
+            if python engine/scripts/wmh_lowmem.py --codigo "$RUNNER_TEMP/wmh" \
+                 --modelo "$RUNNER_TEMP/wmh/fs/models/WMH-SynthSeg_v10_231110.pth" --threads 4 \
+                 --i "$RUNNER_TEMP/flair/$SES.nii.gz" --o "$RUNNER_TEMP/seg.nii.gz" --json "$RUNNER_TEMP/um.json" \
+                 > "$RUNNER_TEMP/registro.txt" 2>&1; then
+              python -c "import json,sys; d=json.load(open(sys.argv[1])); s=sys.argv[3]; d.update(sujeito=sys.argv[2], sessao=s, aparelho=s[:-3], repeticao=s[-3:], serie=sys.argv[4]); json.dump(d, open(sys.argv[5], 'w'))" \
+                "$RUNNER_TEMP/um.json" "${{ matrix.pessoa }}" "$SES" "$DESC" "$RUNNER_TEMP/saida/${{ matrix.pessoa }}_$SES.json"
+              echo "$SES ($DESC): $(grep -E '^lesões \(WMH\)' "$RUNNER_TEMP/registro.txt")"
+            else
+              echo "$SES: falhou"; tail -5 "$RUNNER_TEMP/registro.txt"
+            fi
+            rm -f "$RUNNER_TEMP/flair/$SES.nii.gz"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lesoes-${{ matrix.pessoa }}
+          path: ${{ runner.temp }}/saida/*.json
+          if-no-files-found: warn
+
+  repeticao-resumo:
+    if: always() && inputs.etapa == 'repeticao'
+    needs: repeticao
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lesoes-*
+          path: ${{ runner.temp }}/medidas
+          merge-multiple: true
+      - name: Resumir
+        run: python3 engine/scripts/lesion_retest_summary.py "$RUNNER_TEMP/medidas" "$RUNNER_TEMP/resumo"
+      - name: Publicar
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          test -d "$RUNNER_TEMP/resumo" || exit 1
+          cd "$RUNNER_TEMP/resumo"
+          gh release view teste-lesoes >/dev/null 2>&1 || gh release create teste-lesoes --title "Teste das lesões no FLAIR (automático)" \
+            --prerelease --latest=false --notes "Lesões de substância branca no FLAIR em exames públicos (ON-Harmony, CC0). Nenhum dado de paciente. Uso em pesquisa." || true
+          find . -maxdepth 1 -type f -empty -delete
+          gh release upload teste-lesoes ./* --clobber

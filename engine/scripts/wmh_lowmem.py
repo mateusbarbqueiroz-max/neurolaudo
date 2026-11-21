@@ -212,7 +212,7 @@ def figure(path, image, seg, title):
     plt.close(fig)
 
 
-def segment(torch, model, utils, path_in, path_out, csv_path, figure_path=None):
+def segment(torch, model, utils, path_in, path_out, csv_path, figure_path=None, json_path=None):
     image, aff = utils.MRIread(path_in)
     image_torch = torch.tensor(np.squeeze(image).astype(float))
     while len(image_torch.shape) > 3:
@@ -292,6 +292,12 @@ def segment(torch, model, utils, path_in, path_out, csv_path, figure_path=None):
     sizes = np.sort(np.bincount(components.ravel())[1:])[::-1] if count else np.array([0])
     print(f"lesões rotuladas: {mask.sum() / 1000:.2f} mL em {count} focos (maiores: {', '.join(str(v) for v in sizes[:5])} voxels; "
           f"focos de até 3 voxels: {int((sizes <= 3).sum())})", flush=True)
+    if json_path:
+        import json
+        with open(json_path, "w", encoding="utf-8") as fh:
+            json.dump({"lesoes_ml": round(float(wmh), 3), "lesoes_rotuladas_ml": round(float(mask.sum()) / 1000, 3),
+                       "focos": int(count), "intracraniano_ml": round(float(np.sum(vols[1:])) / 1000, 1),
+                       "tempo_s": round(first_pass + second_pass, 1), "memoria_gb": round(peak_gb(), 2)}, fh)
     if figure_path:
         figure(figure_path, upscaled.numpy(), seg, f"{path_in.split('/')[-1]}: lesões {wmh:.2f} mL (soma das probabilidades), "
                f"{mask.sum() / 1000:.2f} mL rotuladas")
@@ -327,6 +333,7 @@ def main(argv=None) -> int:
     parser.add_argument("--o")
     parser.add_argument("--csv")
     parser.add_argument("--figura")
+    parser.add_argument("--json")
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--conferir", action="store_true")
     args = parser.parse_args(argv)
@@ -346,7 +353,7 @@ def main(argv=None) -> int:
     with torch.no_grad():
         if args.conferir:
             return 0 if check(torch, model) else 1
-        segment(torch, model, utils, args.i, args.o, args.csv, args.figura)
+        segment(torch, model, utils, args.i, args.o, args.csv, args.figura, args.json)
     return 0
 
 
