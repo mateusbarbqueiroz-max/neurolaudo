@@ -245,7 +245,7 @@ jobs:
             -STORESCP YES -AETITLE ISIXTESTE -AEPORT 11113 \
             -SERVERS '({Activated = 1; AETitle = PACSFALSO; Address = "127.0.0.1"; Port = 11112; Description = "PACS de teste"; QR = 1; Send = 1; retrieveMode = 0; TransferSyntax = 0;})' \
             -publishDICOMBonjour NO -searchDICOMBonjour NO \
-            -checkForUpdatesPlugins NO -SUEnableAutomaticChecks NO -httpXMLRPCServer YES -httpXMLRPCServerAccessScope 0 \
+            -checkForUpdatesPlugins NO -SUEnableAutomaticChecks NO -LinkSchemeSupport YES -httpXMLRPCServer NO \
             -NeuroLaudoAutoteste YES -NeuroLaudoMotor "$RUNNER_TEMP/motor" \
             > "$SAIDA/isix-saida.txt" 2>&1 &
           sleep 30
@@ -261,9 +261,11 @@ jobs:
       - name: Importar o exame de teste (o complemento deve abri-lo sozinho)
         run: |
           source "$RUNNER_TEMP/ui.sh"
-          # Grava a tela daqui até o fim do teste: vídeo para o usuário ver o programa rodando (só o fantoma).
-          nohup screencapture -x -k -V 660 "$RUNNER_TEMP/sessao.mov" > "$SAIDA/gravacao.txt" 2>&1 &
-          sleep 3
+          # Uma captura de tela por segundo daqui até o fim do teste, para o vídeo do usuário (só o fantoma).
+          # A gravação de vídeo do macOS (screencapture -V) deixa de fora as janelas de imagem do IsiX.
+          mkdir -p "$RUNNER_TEMP/quadros"
+          nohup bash -c 'n=0; while [ ! -f "$0/parar-video" ] && [ $n -lt 1200 ]; do n=$((n+1)); screencapture -x -t jpg "$0/quadros/$(printf %05d $n).jpg"; sleep 1; done' "$RUNNER_TEMP" > /dev/null 2>&1 &
+          sleep 2
           open -a "$APP" "$RUNNER_TEMP/fantoma" || echo "open falhou"
           sleep 15
           echo "avisos aceitos: $(permitir)"
@@ -408,14 +410,17 @@ jobs:
       - name: Vídeo do teste (trechos parados encurtados)
         if: always()
         run: |
-          for i in $(seq 1 150); do pgrep -x screencapture >/dev/null || break; sleep 5; done
-          if [ ! -s "$RUNNER_TEMP/sessao.mov" ]; then echo "sem gravação"; cat "$SAIDA/gravacao.txt" || true; exit 0; fi
-          ls -la "$RUNNER_TEMP/sessao.mov"
+          touch "$RUNNER_TEMP/parar-video"
+          sleep 3
+          N=$(ls "$RUNNER_TEMP/quadros" 2>/dev/null | wc -l | tr -d ' ')
+          echo "capturas: $N"
+          if [ "${N:-0}" -lt 10 ]; then echo "sem capturas suficientes"; exit 0; fi
           command -v ffmpeg >/dev/null || brew install --quiet ffmpeg >/dev/null 2>&1 || true
-          # mpdecimate tira os quadros repetidos (esperas); max=8 deixa os trechos parados ~9 vezes mais curtos, sem sumir.
-          ffmpeg -hide_banner -loglevel error -y -i "$RUNNER_TEMP/sessao.mov" \
-            -vf "fps=10,scale=1280:-2,mpdecimate=max=8,setpts=N/10/TB" -an \
-            -c:v libx264 -crf 30 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
+          # Uma captura por segundo, mostrada a 3 por segundo (3 vezes mais rápido); mpdecimate encurta mais
+          # os trechos parados, sem tirá-los de todo.
+          ffmpeg -hide_banner -loglevel error -y -framerate 3 -i "$RUNNER_TEMP/quadros/%05d.jpg" \
+            -vf "scale=1280:-2,mpdecimate=max=3,setpts=N/3/TB" -r 3 -an \
+            -c:v libx264 -crf 28 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
             "$SAIDA/video-do-teste.mp4" || echo "conversão falhou"
           ls -la "$SAIDA/video-do-teste.mp4" 2>/dev/null || true
           ffprobe -v error -show_entries format=duration -of csv=p=0 "$SAIDA/video-do-teste.mp4" 2>/dev/null || true
