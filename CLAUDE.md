@@ -55,7 +55,8 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
 - Testes do motor: `cd engine && python -m pytest -q`.
 - Compilar o complemento: só em macOS, `plugin/script/build.sh --configuration Release`.
 - Acionar testes no GitHub: `gh workflow run ARQUIVO.yml --ref main [-f chave=valor]` (sem `--ref` falha).
-  `isix.yml`: complemento dentro do IsiX. `volumetria.yml -f onde=linux|miniatura|ambos|diagnostico`:
+  `isix.yml`: complemento dentro do IsiX (roda sozinho toda segunda, com o IsiX mais novo; ver a
+  última rodada antes de mexer no complemento). `volumetria.yml -f onde=linux|miniatura|ambos|diagnostico`:
   segmentação de verdade em exames públicos.
 - Ler o resultado: `gh api repos/DONO/REPO/actions/runs/ID/jobs` (passos), `.../actions/jobs/ID/logs`
   (registro) e os arquivos das versões `teste-isix` e `teste-volumetria` (baixar com `curl`).

@@ -1,11 +1,15 @@
 # Abre o IsiX DICOM Viewer publicado em um servidor Mac do GitHub, com o
 # complemento NeuroLaudo instalado e o exame de teste (fantoma), e devolve
 # capturas de tela e registros. É o único Mac disponível enquanto o usuário
-# não tem um. Acionado à mão: Actions > "Teste dentro do IsiX" > Run workflow.
+# não tem um. Acionado à mão (Actions > "Teste dentro do IsiX" > Run workflow) e
+# toda segunda-feira, com a versão mais nova do IsiX: o IsiX muda quase todo dia,
+# e uma mudança dele (como a dos links na 6.0.7) pode quebrar o complemento.
 name: Teste dentro do IsiX (macOS)
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * 1"
 
 permissions:
   contents: write
