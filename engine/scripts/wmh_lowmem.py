@@ -372,14 +372,14 @@ def run_original(torch, code, args) -> int:
     from pathlib import Path
     import unet3d.model as unet_model
 
-    class SlabUNet3D(unet_model.UNet3D):
-        def forward(self, x):
-            with torch.no_grad():
-                out = logits(torch, self, x[0, 0])
-            extra = torch.zeros((self.final_conv.out_channels - N_LABELS,) + tuple(out.shape[1:]))
-            return torch.cat([out, extra])[None]
+    def slab_forward(self, x):
+        with torch.no_grad():
+            out = logits(torch, self, x[0, 0])
+        extra = torch.zeros((self.final_conv.out_channels - N_LABELS,) + tuple(out.shape[1:]))
+        return torch.cat([out, extra])[None]
 
-    unet_model.UNet3D = SlabUNet3D
+    # Troca só o cálculo (forward); a classe continua a mesma, porque o __init__ original usa super(UNet3D, self).
+    unet_model.UNet3D.forward = slab_forward
     os.environ.setdefault("FREESURFER_HOME", str(Path(args.modelo).resolve().parent.parent))
     sys.argv = ["inference.py", "--i", args.i, "--o", args.o, "--crop", "--threads", str(args.threads or -1)]
     if args.csv:
