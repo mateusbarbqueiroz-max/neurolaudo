@@ -261,6 +261,9 @@ jobs:
       - name: Importar o exame de teste (o complemento deve abri-lo sozinho)
         run: |
           source "$RUNNER_TEMP/ui.sh"
+          # Grava a tela daqui até o fim do teste: vídeo para o usuário ver o programa rodando (só o fantoma).
+          nohup screencapture -x -k -V 660 "$RUNNER_TEMP/sessao.mov" > "$SAIDA/gravacao.txt" 2>&1 &
+          sleep 3
           open -a "$APP" "$RUNNER_TEMP/fantoma" || echo "open falhou"
           sleep 15
           echo "avisos aceitos: $(permitir)"
@@ -401,6 +404,21 @@ jobs:
           screencapture -x "$SAIDA/10-nomes-das-series.png" || echo "captura falhou"
           clicar_isix "Fechar"
           log show --last 2m --style compact --predicate 'subsystem == "app.neurolaudo.isixplugin"' 2>/dev/null | grep "nomes das séries" || echo "complemento: nada sobre nomes das séries"
+
+      - name: Vídeo do teste (trechos parados encurtados)
+        if: always()
+        run: |
+          for i in $(seq 1 150); do pgrep -x screencapture >/dev/null || break; sleep 5; done
+          if [ ! -s "$RUNNER_TEMP/sessao.mov" ]; then echo "sem gravação"; cat "$SAIDA/gravacao.txt" || true; exit 0; fi
+          ls -la "$RUNNER_TEMP/sessao.mov"
+          command -v ffmpeg >/dev/null || brew install --quiet ffmpeg >/dev/null 2>&1 || true
+          # mpdecimate tira os quadros repetidos (esperas); max=8 deixa os trechos parados ~9 vezes mais curtos, sem sumir.
+          ffmpeg -hide_banner -loglevel error -y -i "$RUNNER_TEMP/sessao.mov" \
+            -vf "fps=10,scale=1280:-2,mpdecimate=max=8,setpts=N/10/TB" -an \
+            -c:v libx264 -crf 30 -preset veryfast -pix_fmt yuv420p -movflags +faststart \
+            "$SAIDA/video-do-teste.mp4" || echo "conversão falhou"
+          ls -la "$SAIDA/video-do-teste.mp4" 2>/dev/null || true
+          ffprobe -v error -show_entries format=duration -of csv=p=0 "$SAIDA/video-do-teste.mp4" 2>/dev/null || true
 
       - name: Registros
         if: always()
