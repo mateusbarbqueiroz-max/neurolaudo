@@ -40,6 +40,9 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 
 ## Feito
 
+- Estudo das lesões no FLAIR (21/11/2026, `docs/LESOES-FLAIR.md`): a versão por fatias roda em cerca de
+  6 GB e dá o mesmo resultado do WMH-SynthSeg original, conferido num exame inteiro (mesmo rótulo em
+  100 % dos voxels). Repetição medida em 164 exames públicos. Não faz parte do complemento.
 - Volumetria comparada com o exame anterior do mesmo paciente (21/11/2026): página nova no relatório,
   com a variação, a taxa por ano e o limite de repetição medido em 20 voluntários públicos escaneados
   em vários aparelhos (`docs/VOLUMETRIA.md`). Conferida em Linux e dentro do IsiX 6.0.7 no servidor

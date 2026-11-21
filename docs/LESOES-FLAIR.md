@@ -23,6 +23,21 @@ como na original. Foi conferida contra a rede original em volumes pequenos, onde
 a original cabe na memória: o mesmo rótulo em 100 % dos voxels, com diferença só
 de arredondamento, em Linux e no Mac.
 
+Conferida também num exame inteiro (o FLAIR 3D do Siemens Prisma abaixo), em
+duas partes, porque o original inteiro derrubou o servidor mesmo com memória
+extra em disco:
+
+- O programa original, sem mudança, só com a rede trocada pela por fatias: o
+  mesmo rótulo em 100 % dos voxels (8.556 voxels de lesão nas duas versões, os
+  mesmos; 9,01 mL). Isso confere a leitura, o recorte, o espelhamento e o cálculo
+  dos volumes.
+- A rede original contra a por fatias num bloco de 128 × 160 × 128 mm do mesmo
+  exame, onde a original cabe na memória: o mesmo rótulo em 100 % dos voxels
+  (4.535 voxels de lesão nas duas, os mesmos).
+
+Ou seja: os números abaixo são os do WMH-SynthSeg original, não de um erro da
+versão por fatias.
+
 | Máquina | Tempo por exame | Memória |
 | --- | --- | --- |
 | Servidor Linux do GitHub (2 núcleos) | 7 a 8 minutos | 5,7 a 6,5 GB |
@@ -87,5 +102,6 @@ programa original. Contar só os voxels rotulados como lesão dá quase o mesmo
 ## Como repetir
 
 No GitHub, aba Actions, fluxo "Lesões no FLAIR (estudo)": `etapa=viabilidade`
-(dois exames, em Linux e no Mac) ou `etapa=repeticao` (20 voluntários). Os
+(dois exames, em Linux e no Mac), `etapa=repeticao` (20 voluntários) ou
+`etapa=original` (conferência com o programa original num exame inteiro). Os
 resultados ficam na versão `teste-lesoes` do repositório.
