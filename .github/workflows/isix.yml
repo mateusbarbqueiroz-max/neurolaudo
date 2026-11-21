@@ -449,4 +449,6 @@ jobs:
             gh release create teste-isix --title "Teste dentro do IsiX (automático)" --prerelease --latest=false \
               --notes "Capturas de tela e registros do último teste automático no servidor Mac. Só o exame de teste (fantoma); nenhum dado de paciente."
           fi
+          # O GitHub recusa arquivo vazio, e um só recusado derruba a publicação de todos.
+          find . -maxdepth 1 -type f -empty -delete
           gh release upload teste-isix ./* --clobber

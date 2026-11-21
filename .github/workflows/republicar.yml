@@ -1,0 +1,44 @@
+name: Republicar os arquivos de um teste
+
+# Quando a publicação de um teste falha, os arquivos ficam guardados no próprio
+# GitHub (artefato), mas a sessão do Claude não os alcança. Este fluxo os busca
+# e os publica na versão de teste indicada.
+
+on:
+  workflow_dispatch:
+    inputs:
+      execucao:
+        description: "Número da execução do teste"
+        required: true
+      artefato:
+        description: "Nome do artefato"
+        default: "teste-no-isix"
+      versao:
+        description: "Versão de teste onde publicar"
+        default: "teste-isix"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  republicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artefato }}
+          run-id: ${{ inputs.execucao }}
+          github-token: ${{ github.token }}
+          path: arquivos
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSAO: ${{ inputs.versao }}
+        run: |
+          cd arquivos
+          find . -type f -empty -delete
+          ls -la
+          gh release upload "$VERSAO" ./* --clobber
