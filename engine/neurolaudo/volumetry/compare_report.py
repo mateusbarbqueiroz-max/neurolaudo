@@ -135,7 +135,7 @@ def build_comparison_figure(norms: Norms, comparison: Mapping, records: Sequence
                           label="atual, além da repetição")]
         fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(left - 0.008, cursor - 0.005), ncol=6, frameon=False,
                    fontsize=7, labelcolor=INK_SECONDARY, handlelength=1.4, columnspacing=1.0)
-        grid = fig.add_gridspec(2, 5, left=left, right=right, top=cursor - 0.072, bottom=0.215, wspace=0.42, hspace=0.55)
+        grid = fig.add_gridspec(2, 5, left=left, right=right, top=cursor - 0.072, bottom=0.24, wspace=0.42, hspace=0.55)
         for index, row in enumerate(rows[:10]):
             points = [(float(r["idade"]), history.adjusted_mm3(norms, r, row["id"], model_key) / 1000.0) for r in dated
                       if r["volumes_mm3"].get(row["id"])]
@@ -161,7 +161,7 @@ def build_comparison_figure(norms: Norms, comparison: Mapping, records: Sequence
                      f"Usado o limite de {scenario}. Variação menor que esse limite pode ser só a imprecisão da medida; "
                      "maior mostra mudança real, não necessariamente anormal: compare com a inclinação das faixas.")
     lines.append("Os gráficos mostram o volume ajustado de cada exame do paciente medido neste Mac, na idade de cada exame.")
-    y = 0.172
+    y = 0.19
     for line in lines:
         for piece in textwrap.wrap(line, 118):
             fig.text(left, y, piece, fontsize=7.5, color=INK_SECONDARY, va="top")
