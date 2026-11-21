@@ -534,6 +534,9 @@ public struct IsiXInputKinds: OptionSet, Hashable, Sendable {
     public var stubIsOpen = true
     /// Cortes com geometria e pixels próprios (só do stub). Vazio: todos os cortes usam `stubGeometry`.
     public var stubSlices: [(geometry: IsiXImageGeometry, pixels: IsiXPixelData)] = []
+    /// Tempo de eco e de repetição das imagens, em ms (só do stub).
+    public var stubEchoTime: Double?
+    public var stubRepetitionTime: Double?
 
     public init(stubSeries: IsiXSeriesSummary, geometry: IsiXImageGeometry) {
         self.id = IsiXViewerID()
@@ -579,7 +582,8 @@ public struct IsiXInputKinds: OptionSet, Hashable, Sendable {
         let index = try checked(slice)
         return IsiXImageAttributes(modality: stubSeries.modality, studyInstanceUID: stubSeries.studyInstanceUID,
                                    seriesInstanceUID: stubSeries.seriesInstanceUID,
-                                   sopInstanceUID: "\(stubSeries.seriesInstanceUID ?? "1.2.3").\(index + 1)")
+                                   sopInstanceUID: "\(stubSeries.seriesInstanceUID ?? "1.2.3").\(index + 1)",
+                                   echoTime: stubEchoTime, repetitionTime: stubRepetitionTime)
     }
 
     public func image(slice: Int? = nil, phase: Int? = nil) throws -> IsiXImage {

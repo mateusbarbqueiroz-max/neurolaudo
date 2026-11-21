@@ -236,6 +236,27 @@ jobs:
           "$MOTOR/venv/bin/python" -m pip install --quiet ./engine
           "$MOTOR/venv/bin/python" engine/tests/fakes/make_fake_engine.py "$MOTOR"
           NEUROLAUDO_MOTOR="$MOTOR" "$MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli verificar
+          # Um exame anterior do mesmo fantoma (março de 2025) no histórico deste Mac: a volumetria do fantoma
+          # (novembro de 2026), feita depois dentro do IsiX, tem de sair com a página de comparação.
+          ANTERIOR="$RUNNER_TEMP/anterior"
+          "$MOTOR/venv/bin/python" - "$ANTERIOR" <<'EOF'
+          import json, sys
+          from pathlib import Path
+          import nibabel as nib, numpy as np
+          sys.path.insert(0, "engine/scripts")
+          from make_phantom import t1_volume
+          out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
+          data, x, y0, z0 = t1_volume()
+          sp = 1.25   # cortes sagitais de x[0] para a esquerda; linhas para baixo; colunas para trás (em RAS)
+          affine = np.array([[-sp, 0, 0, -x[0]], [0, 0, -sp, -y0], [0, -sp, 0, z0], [0, 0, 0, 1]], dtype=float)
+          nib.save(nib.Nifti1Image(np.asarray(data, dtype=np.float32), affine), str(out / "t1.nii.gz"))
+          (out / "cabecalho.json").write_text(json.dumps({"id": "000003", "exame": "fantoma-anterior", "data": "20250310",
+                                                          "idade": 67.0, "sexo": "F", "serie": "SAG T1 MPRAGE"}))
+          EOF
+          NEUROLAUDO_MOTOR="$MOTOR" "$MOTOR/venv/bin/python" -m neurolaudo.volumetry.cli exame --nifti "$ANTERIOR/t1.nii.gz" \
+            --saida "$ANTERIOR/saida" --cabecalho "$ANTERIOR/cabecalho.json" \
+            --historico "$HOME/Library/Application Support/NeuroLaudo/historico"
+          ls -la "$HOME/Library/Application Support/NeuroLaudo/historico"
 
       - name: Abrir o IsiX
         run: |
@@ -367,6 +388,8 @@ jobs:
           janelas
           screencapture -x "$SAIDA/7-volumetria-mapa.png" || echo "captura falhou"
           REGISTRO | grep -q "volumetria: concluída" && echo "VOLUMETRIA NO ISIX: OK" || echo "VOLUMETRIA NO ISIX: NÃO CONCLUÍDA"
+          REGISTRO | grep -q "comparado com o exame de 20250310" && echo "COMPARAÇÃO COM O EXAME ANTERIOR: OK" \
+            || echo "COMPARAÇÃO COM O EXAME ANTERIOR: NÃO APARECEU"
 
       - name: Botão do PACS simulado (link no formato do PACS do hospital)
         run: |

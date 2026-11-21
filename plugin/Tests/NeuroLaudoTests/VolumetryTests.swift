@@ -8,6 +8,8 @@ final class FakeEngine: VolumetryEngine, @unchecked Sendable {
     var failure: String?
     /// Orientação que o "motor" diz ter lido do arquivo; `nil` repete a do pedido.
     var orientation: String?
+    /// Data do exame anterior que o "motor" diz ter comparado; `nil`: sem comparação.
+    var comparedWith: String?
     private(set) var jobs: [VolumetryJob] = []
 
     func checkInstalled() throws {
@@ -29,7 +31,7 @@ final class FakeEngine: VolumetryEngine, @unchecked Sendable {
         try Data(map).write(to: job.output.appendingPathComponent("mapa.rgba"))
         try Data([UInt8](repeating: 200, count: 3 * 2 * 4)).write(to: job.output.appendingPathComponent("pagina-1.rgba"))
         try Data([UInt8](repeating: 100, count: 3 * 2 * 4)).write(to: job.output.appendingPathComponent("pagina-2.rgba"))
-        let result: [String: Any] = [
+        var result: [String: Any] = [
             "aviso": "Uso em pesquisa. Não validado para diagnóstico.",
             "resumo": ["Hipocampo esquerdo: 3,7 mL, percentil 2  ▼ abaixo do percentil 5"],
             "frase_laudo": "Volumetria cerebral automática: hipocampo esquerdo 3,7 mL (percentil 2).",
@@ -38,6 +40,7 @@ final class FakeEngine: VolumetryEngine, @unchecked Sendable {
             "paginas": [["arquivo": "pagina-1.rgba", "largura": 3, "altura": 2], ["arquivo": "pagina-2.rgba", "largura": 3, "altura": 2]],
             "mapa": ["arquivo": "mapa.rgba", "colunas": job.columns, "linhas": job.rows, "cortes": slices],
         ]
+        if let comparedWith { result["comparacao"] = ["anterior": ["data": comparedWith], "frase": "Comparação."] }
         try JSONSerialization.data(withJSONObject: result).write(to: job.output.appendingPathComponent("resultado.json"))
     }
 }
@@ -97,6 +100,8 @@ final class VolumetryTests: XCTestCase {
             let harness = try Harness()
             harness.loadPatient()
             let viewer = try harness.addT1Viewer(reversed: true)
+            viewer.stubRepetitionTime = 2300
+            viewer.stubEchoTime = 2.98
             let job = try Volumetry.prepare(viewer: viewer, context: harness.context, temporary: folder)
 
             XCTAssertEqual(job.orientation, "PIR")
@@ -123,6 +128,10 @@ final class VolumetryTests: XCTestCase {
             XCTAssertEqual(header["serie"] as? String, "SAG T1 MPRAGE")
             XCTAssertEqual((header["avisos"] as? [String])?.count, 0)
             XCTAssertEqual((header["data"] as? String)?.count, 8)
+            // Para o histórico de comparação: o exame e os parâmetros da aquisição.
+            XCTAssertEqual(header["id"] as? String, "P1")
+            XCTAssertEqual(header["exame"] as? String, "study-1")
+            XCTAssertEqual(header["aquisicao"] as? [String: Double], ["tr": 2300, "te": 2.98])
         }
     }
 
@@ -164,6 +173,7 @@ final class VolumetryTests: XCTestCase {
 
     func testWholeCommandStoresReportAndMapInTheStudy() async throws {
         let engine = FakeEngine()
+        engine.comparedWith = "20250310"
         let (harness, task) = try await MainActor.run { () -> (Harness, IsiXTask) in
             let harness = try Harness()
             harness.loadPatient()
@@ -201,6 +211,7 @@ final class VolumetryTests: XCTestCase {
             let shown = try XCTUnwrap(harness.presenter.shown.last)
             XCTAssertTrue(shown.title.contains("Uso em pesquisa"))
             XCTAssertTrue(shown.text.contains("hipocampo esquerdo 3,7 mL") && shown.text.contains("Aviso de teste."))
+            XCTAssertTrue(shown.text.contains("página de comparação com o exame de 10/03/2025"))
             // A pasta temporária, com a imagem e o nome do paciente, foi apagada, e os arquivos do IsiX também.
             let job = try XCTUnwrap(engine.jobs.first)
             XCTAssertFalse(FileManager.default.fileExists(atPath: job.folder.path))
@@ -274,6 +285,7 @@ final class VolumetryTests: XCTestCase {
             #!/bin/sh
             [ "$1" = "-m" ] && [ "$2" = "neurolaudo.volumetry.cli" ] && [ "$3" = "exame" ] || exit 9
             [ -n "$NEUROLAUDO_MOTOR" ] || exit 8
+            [ "${12}" = "--historico" ] && [ -n "${13}" ] || exit 7
             printf '0.42\\tSegmentando\\n' > "${11}"
             sleep 1
             mkdir -p "$7" && echo ok > "$7/feito.txt"

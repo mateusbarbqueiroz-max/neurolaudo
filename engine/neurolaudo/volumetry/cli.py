@@ -70,7 +70,7 @@ def run_exam_command(args: argparse.Namespace) -> int:
 
     result = run_exam(args.nifti, args.saida, age=age, sex=sex, header=header, threads=args.nucleos, progress=progress,
                       series_notes=[str(n) for n in data.get("avisos", [])], quality=args.qualidade,
-                      refine=not args.um_passo)
+                      refine=not args.um_passo, history_dir=args.historico, tracking=data)
     flagged = [e["nome"] for e in result["estruturas"] if e["marca"]]
     print(f"Volumetria gravada em {args.saida}. Fora da faixa de 5 a 95: {', '.join(flagged) if flagged else 'nenhuma estrutura'}.")
     for warning in result["avisos"]:
@@ -121,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
                       help="segmenta uma vez só, sem o segundo passo com o recorte das normas (mais rápido, menos fiel)")
     exam.add_argument("--qualidade", action="store_true",
                       help="pede também as notas automáticas de qualidade (exige bem mais memória)")
+    exam.add_argument("--historico", help="pasta do histórico deste Mac: guarda o exame e compara com o anterior "
+                                          "do mesmo paciente (usa id, exame e data do --cabecalho)")
     _add_header_options(exam)
     exam.set_defaults(run=run_exam_command)
 

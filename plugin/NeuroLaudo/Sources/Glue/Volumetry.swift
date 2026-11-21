@@ -58,6 +58,8 @@ struct VolumetryResult: Sendable, Equatable {
     var mapRows: Int
     var mapSlices: Int
     var orientation: String
+    /// Data (AAAAMMDD) do exame anterior com que o relatório foi comparado, se houve comparação.
+    var comparedWith: String? = nil
 
     static func load(from folder: URL) throws -> VolumetryResult {
         let data = try Data(contentsOf: folder.appendingPathComponent("resultado.json"))
@@ -78,7 +80,8 @@ struct VolumetryResult: Sendable, Equatable {
                                warnings: root["avisos"] as? [String] ?? [],
                                disclaimer: root["aviso"] as? String ?? Volumetry.disclaimer,
                                pages: pages, mapFile: mapFile, mapColumns: columns, mapRows: rows, mapSlices: slices,
-                               orientation: input?["orientacao"] as? String ?? "")
+                               orientation: input?["orientacao"] as? String ?? "",
+                               comparedWith: ((root["comparacao"] as? [String: Any])?["anterior"] as? [String: Any])?["data"] as? String)
     }
 }
 
@@ -94,6 +97,10 @@ protocol VolumetryEngine: Sendable {
 struct ProcessEngine: VolumetryEngine {
     /// Preferência do IsiX que troca a pasta do motor (usada no teste automático).
     static let homeKey = "NeuroLaudoMotor"
+    /// Histórico deste Mac para comparar exames do mesmo paciente (sem nome nem identificador; ver o motor).
+    static var historyFolder: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/NeuroLaudo/historico")
+    }
     static let notInstalled = "O motor de volumetria não está instalado neste Mac. "
         + "Siga o passo \"Volumetria\" do guia de instalação do NeuroLaudo e chame o comando de novo."
 
@@ -125,7 +132,7 @@ struct ProcessEngine: VolumetryEngine {
         process.executableURL = python
         process.arguments = ["-m", "neurolaudo.volumetry.cli", "exame", "--nifti", job.nifti.path,
                              "--saida", job.output.path, "--cabecalho", job.header.path,
-                             "--progresso", job.progressFile.path]
+                             "--progresso", job.progressFile.path, "--historico", Self.historyFolder.path]
         var environment = ProcessInfo.processInfo.environment
         environment["NEUROLAUDO_MOTOR"] = home.path
         environment["PYTHONUNBUFFERED"] = "1"
@@ -170,6 +177,9 @@ struct ProcessEngine: VolumetryEngine {
 struct VolumetryStored: Sendable, Equatable {
     var reportSeriesUID: String?
     var mapSeriesUID: String?
+    /// Páginas do relatório e data do exame anterior comparado, para o registro.
+    var pages = 0
+    var comparedWith: String?
 }
 
 enum Volumetry {
@@ -251,6 +261,7 @@ enum Volumetry {
                                geometries: grid.order.map { geometries[$0] }, order: grid.order,
                                columns: grid.columns, rows: grid.rows,
                                orientation: grid.orientationCode)
+        var header: [String: Any] = [:]
         do {
             FileManager.default.createFile(atPath: job.nifti.path, contents: nil)
             let handle = try FileHandle(forWritingTo: job.nifti)
@@ -261,12 +272,21 @@ enum Volumetry {
                 guard let pixels = image.scalarPixels, pixels.width == grid.columns, pixels.height == grid.rows else {
                     throw PluginFailure("A série aberta é colorida ou tem cortes de tamanhos diferentes: não é um T1 volumétrico.")
                 }
-                if job.sourceSOPInstanceUID == nil { job.sourceSOPInstanceUID = image.attributes.sopInstanceUID }
+                if job.sourceSOPInstanceUID == nil {
+                    job.sourceSOPInstanceUID = image.attributes.sopInstanceUID
+                    // Parâmetros da aquisição: o motor só usa o limite do mesmo aparelho se forem iguais nos dois exames.
+                    var acquisition: [String: Double] = [:]
+                    if let tr = image.attributes.repetitionTime, tr > 0 { acquisition["tr"] = tr }
+                    if let te = image.attributes.echoTime, te > 0 { acquisition["te"] = te }
+                    header["aquisicao"] = acquisition
+                }
                 try handle.write(contentsOf: Nifti.bytes(of: pixels.samples))
             }
 
             let study = try context.database().study(withInstanceUID: studyUID)
-            var header: [String: Any] = ["serie": description, "avisos": notes]
+            header["serie"] = description
+            header["avisos"] = notes
+            header["exame"] = studyUID
             if let name = study?.patientName { header["nome"] = name }
             if let id = study?.patientID { header["id"] = id }
             if let sex = study?.patientSex { header["sexo"] = sex }
@@ -354,6 +374,10 @@ enum Volumetry {
         if !result.warnings.isEmpty {
             text += "\n\nAvisos:\n" + result.warnings.map { "• " + $0 }.joined(separator: "\n")
         }
+        if let date = result.comparedWith, date.count == 8 {
+            let shown = "\(date.suffix(2))/\(date.dropFirst(4).prefix(2))/\(date.prefix(4))"
+            text += "\n\nO relatório tem uma página de comparação com o exame de \(shown), medido antes neste Mac."
+        }
         text += "\n\nO relatório e o mapa colorido da segmentação foram gravados no exame, como duas séries novas. "
             + "Confira no mapa se cada estrutura está no lugar e do lado certo antes de usar os números."
         return MeasureOutcome(title: "Volumetria cerebral. \(result.disclaimer)", text: text)
@@ -368,9 +392,11 @@ enum Volumetry {
             let result = try VolumetryResult.load(from: job.output)
             let requests = try requests(for: job, result: result)
             progress.report(0.98, message: "Gravando no exame")
-            let stored = try await MainActor.run {
+            var stored = try await MainActor.run {
                 try store(report: requests.report, map: requests.map, context: context)
             }
+            stored.pages = result.pages.count
+            stored.comparedWith = result.comparedWith
             return (outcome(result), stored)
         } catch is CancellationError {
             return (MeasureOutcome(title: title, text: "Volumetria cancelada. Nada foi gravado no exame."), nil)

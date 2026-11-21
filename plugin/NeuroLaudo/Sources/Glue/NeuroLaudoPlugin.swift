@@ -296,7 +296,9 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
 
     private func finishVolumetry(_ outcome: MeasureOutcome, stored: VolumetryStored?, context: IsiXPluginContext) {
         if let stored {
-            PluginLog.note("volumetria: concluída, relatório \(stored.reportSeriesUID ?? "-"), mapa \(stored.mapSeriesUID ?? "-")")
+            let compared = stored.comparedWith.map { ", comparado com o exame de \($0)" } ?? ""
+            PluginLog.note("volumetria: concluída, relatório \(stored.reportSeriesUID ?? "-") (\(stored.pages) página(s)\(compared)), "
+                + "mapa \(stored.mapSeriesUID ?? "-")")
             // Abre o mapa colorido ao lado do T1. O IsiX já o posiciona no mesmo corte em que o T1 está.
             if let map = stored.mapSeriesUID { _ = try? context.database().openViewer(forSeries: map) }
         } else {

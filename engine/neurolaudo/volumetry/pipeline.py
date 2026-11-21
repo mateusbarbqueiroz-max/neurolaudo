@@ -31,7 +31,7 @@ from typing import Callable, Mapping
 import nibabel as nib
 import numpy as np
 
-from neurolaudo.volumetry import overlay, report, volume
+from neurolaudo.volumetry import compare_report, history, overlay, report, volume
 from neurolaudo.volumetry.norms import assess, load_norms
 from neurolaudo.volumetry.tables import QC_TITLES_PT, read_volumes_csv, result_json
 
@@ -134,7 +134,8 @@ def _write_raw(path: Path, array: np.ndarray) -> None:
 
 def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
              header: report.ReportHeader | None = None, threads: int | None = None, tools: Tools | None = None,
-             progress: Progress | None = None, series_notes=(), quality: bool = False, refine: bool = True) -> dict:
+             progress: Progress | None = None, series_notes=(), quality: bool = False, refine: bool = True,
+             history_dir: str | None = None, tracking: Mapping | None = None) -> dict:
     """Roda a volumetria de um volume T1 e grava os resultados em `out_dir`. Devolve o conteúdo de resultado.json.
 
     `series_notes`: avisos sobre a série vindos de quem chamou (por exemplo, "série com contraste").
@@ -145,6 +146,9 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
     motivos medidos no exame público IXI002: com as notas, os volumes deixam de ser idênticos aos da tabela que
     ajustou as normas (até 1,3 % de diferença no córtex), e a memória necessária estoura (a rede das notas
     trabalha em 224³ voxels com filtros de 5×5×5).
+    `history_dir`: pasta do histórico deste Mac (ver history.py). Com ela e com `tracking` (o cabeçalho do
+    complemento: "id" do paciente, "exame" (UID), "data", "serie", "aquisicao"), o exame é guardado e, se
+    houver um anterior do mesmo paciente, o relatório ganha a página da comparação.
     """
     say = progress or (lambda fraction, message: None)
     started = time.monotonic()
@@ -233,13 +237,39 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
     notes = list(series_notes) + edge_notes + quality_warnings(scores) + resolution_notes(zooms)
     footnotes = quality_summary(scores)
 
+    comparison, history_notes, records, repeatability = None, [], [], None
+    if history_dir:
+        say(0.88, "Procurando exame anterior")
+        try:
+            folder = Path(history_dir)
+            record = history.make_record(assessment, tracking or {}, image.shape[:3], zooms, history.load_secret(folder))
+            if record is None:
+                history_notes.append("Sem identificador do paciente, do exame ou data: este exame não entra no histórico "
+                                     "e não é comparado com exames anteriores.")
+            else:
+                earlier, history_notes = history.earlier_exams(folder, record)
+                if earlier:
+                    repeatability = history.load_repeatability()
+                    comparison = history.compare(assessment.norms, earlier[-1], record, repeatability)
+                    comparison["avisos"] = history_notes + comparison["avisos"]
+                    records = earlier + [record]
+                history.save(folder, record)
+        except (OSError, ValueError, KeyError) as error:
+            history_notes.append(f"Histórico de exames indisponível ({error}): sem comparação com exame anterior.")
+
     say(0.90, "Montando o relatório")
-    pages = [report.build_figure(assessment, header, notes, footnotes),
-             overlay.montage_figure(image, labels, report.patient_line(assessment, header))]
+    who = report.patient_line(assessment, header)
+    pages = [report.build_figure(assessment, header, notes, footnotes)]
+    names = ["relatorio.png"]
+    if comparison:
+        pages.append(compare_report.build_comparison_figure(assessment.norms, comparison, records, who, repeatability))
+        names.append("comparacao.png")
+    pages.append(overlay.montage_figure(image, labels, who))
+    names.append("conferencia.png")
     page_files = []
     try:
         report.save_figures_pdf(str(out / "relatorio.pdf"), pages)
-        for number, (fig, png) in enumerate(zip(pages, ("relatorio.png", "conferencia.png")), start=1):
+        for number, (fig, png) in enumerate(zip(pages, names), start=1):
             fig.savefig(str(out / png), format="png", dpi=PAGE_DPI, facecolor=fig.get_facecolor())
             rgba = report.figure_rgba(fig, PAGE_DPI)
             _write_raw(out / f"pagina-{number}.rgba", rgba)
@@ -253,8 +283,11 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
     _write_raw(out / "mapa.rgba", color_map)
 
     result = result_json(assessment)
+    if comparison:
+        result["frase_laudo"] += " " + comparison["frase"]
     result.update({
-        "avisos": list(assessment.warnings) + notes,
+        "avisos": list(assessment.warnings) + notes + (comparison["avisos"] if comparison else history_notes),
+        "comparacao": comparison,
         "qualidade": {QC_TITLES_PT.get(k, k): round(v, 3) for k, v in scores.items()},
         "entrada": {"voxels": [int(v) for v in image.shape[:3]], "voxel_mm": [round(z, 3) for z in zooms],
                     "orientacao": volume.orientation(image)},
@@ -263,7 +296,8 @@ def run_exam(nifti_path: str, out_dir: str, age: float | None, sex: str | None,
         "paginas": page_files,
         "mapa": {"arquivo": "mapa.rgba", "cortes": int(color_map.shape[0]), "linhas": int(color_map.shape[1]),
                  "colunas": int(color_map.shape[2])},
-        "arquivos": {"pdf": "relatorio.pdf", "relatorio": "relatorio.png", "conferencia": "conferencia.png"},
+        "arquivos": {"pdf": "relatorio.pdf", "relatorio": "relatorio.png", "conferencia": "conferencia.png",
+                     **({"comparacao": "comparacao.png"} if comparison else {})},
         "tempos_s": {"segmentacao": round(segment_seconds, 1), "total": round(time.monotonic() - started, 1)},
         "nucleos": threads,
     })
