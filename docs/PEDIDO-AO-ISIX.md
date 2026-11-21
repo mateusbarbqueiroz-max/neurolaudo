@@ -20,6 +20,10 @@ vulnerability" dava erro 404 (o relato privado não está ligado no repositório
 dele); o texto, em português, foi enviado pelo usuário por e-mail em 20/11/2026.
 Ele não fica neste repositório público, por ser um aviso privado.
 
+No mesmo dia o autor publicou a 6.0.7, que adota as duas sugestões do aviso:
+os links passaram a ter opção própria e não abrem porta de rede, e a porta de
+comandos, quando ligada, atende só o próprio Mac de fábrica.
+
 A sessão do Claude não consegue abrir nem comentar pedidos no repositório do
 autor, nem ler os comentários pela API do GitHub; lê a página pública.
 

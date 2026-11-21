@@ -100,6 +100,13 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
   em qualquer caixa (`docs/FATOS-ISIX.md`). A API do GitHub não alcança o repositório do autor
   (nem para ler o pedido 48): ler a página pública com o agente web-fetch e o código com `git fetch`
   em `/home/user/refs/isix`.
+- IsiX 6.0.7 separou os links (`-LinkSchemeSupport YES`) da porta de comandos (`httpXMLRPCServer`);
+  sem os links ligados, o primeiro link abre a pergunta "Should I activate it now?".
+- Servidor Mac do GitHub (macOS 27): o `kickstart` do compartilhamento de tela trava, então não dá para
+  o usuário usar o Mac remoto. A gravação `screencapture -V` sai sem as janelas de imagem do IsiX; o
+  vídeo do teste é feito de uma captura por segundo. A tela tem 1024 x 768.
+- Arquivo vazio derruba `gh release upload` de todos os arquivos; artefatos do GitHub não chegam a esta
+  sessão (`republicar.yml` os copia para uma versão de teste).
 - Botão do PACS sem hospital: `engine/scripts/fake_pacs.py` é um PACS de teste (C-FIND com número
   de imagens, C-MOVE); `isix.yml` o usa com um link no formato do hospital.
 - O matplotlib desta sessão usa a fonte Inter por configuração local; as páginas fixam DejaVu Sans

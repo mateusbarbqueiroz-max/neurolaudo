@@ -20,7 +20,7 @@ o botão no mesmo Mac. Esse teste é o seu.
 ## Passo 1 — Instalar o IsiX
 
 1. Abra <https://github.com/ThalesMMS/IsiX-DICOM-Viewer-macOS/releases>.
-2. Na versão mais recente (6.0.6 ou mais nova), abra **Assets** e baixe o
+2. Na versão mais recente (6.0.7 ou mais nova), abra **Assets** e baixe o
    arquivo `.zip` de **Apple Silicon** (tem `Apple-Silicon` no nome).
 3. Dê dois cliques no `.zip`. Arraste **IsiX DICOM Viewer** para a pasta
    **Aplicativos**.
@@ -31,9 +31,9 @@ O IsiX cria um banco de dados próprio (pasta `IsiX Data`). Se ele avisar que
 encontrou um banco do Horos ou do OsiriX, é só um aviso: ele não abre nem
 altera esse banco.
 
-Use a 6.0.6 ou mais nova: foi a partir da 6.0.4 que o IsiX passou a entender o
-link do botão do PACS como o OsiriX MD (pedido nosso ao autor, atendido em
-19/11/2026).
+Use a 6.0.7 ou mais nova. A partir da 6.0.4 o IsiX passou a entender o link do
+botão do PACS como o OsiriX MD, e na 6.0.7 os links deixaram de abrir uma porta
+de rede (os dois foram pedidos nossos ao autor, atendidos em 19 e 20/11/2026).
 
 ## Passo 2 — Cadastrar o servidor do hospital no IsiX
 
@@ -57,25 +57,23 @@ Por isso o IsiX precisa conhecer o servidor, como o OsiriX MD conhece.
    que o OsiriX usa. O servidor do hospital só entrega exames a quem ele conhece
    por esse nome.
 
-## Passo 3 — Ligar os links, só para este Mac
+## Passo 3 — Ligar os links
 
-1. No IsiX, em **Settings > Listener**, marque **Activate the URL support and
-   HTTP XML-RPC Server on port** (8080).
-2. Em **Answer messages from**, escolha **This Mac only**.
-3. Feche e abra o IsiX.
+1. No IsiX, em **Settings > Listener**, marque **Open [ isix:// , horos:// ,
+   osirix:// ] links**. Vale na hora.
+2. Deixe desmarcado **Activate the HTTP XML-RPC Server on port**: é uma porta
+   de comandos para outros computadores, e o botão do PACS não precisa dela.
 
-Não pule o item 2. Ao ligar os links, o IsiX também abre uma porta de comandos
-para outros computadores, e de fábrica ela atende **qualquer endereço, sem
-senha**. Um desses comandos devolve o conteúdo do banco, com nomes e
-identificadores de pacientes. O botão do PACS não precisa disso: o link é
-aberto no próprio Mac. O próprio IsiX avisa disso em vermelho nessa tela.
+Se esquecer o item 1, nada se perde: no primeiro clique no botão do PACS o IsiX
+pergunta **Should I activate it now?** ("ativo agora?"). Clique em **Activate**
+e ele busca o exame em seguida.
 
 ## Passo 4 — Passar o botão do PACS para o IsiX
 
-Com o OsiriX MD instalado, os dois disputam o botão. Ao abrir de novo (fim do
-Passo 3), o IsiX percebe que o OsiriX MD abre os links `osirix://` e mostra um
-aviso, **Another application opens the links of IsiX DICOM Viewer** (pode
-aparecer traduzido):
+Com o OsiriX MD instalado, os dois disputam o botão. Feche e abra o IsiX: com os
+links ligados (Passo 3), ele percebe que o OsiriX MD abre os links `osirix://` e
+mostra um aviso, **Another application opens the links of IsiX DICOM Viewer**
+(pode aparecer traduzido):
 
 - **Make IsiX the Default**: o botão do PACS passa a abrir o IsiX. É o que
   queremos para o teste.
@@ -118,6 +116,7 @@ O que pode acontecer:
 | --- | --- |
 | O exame começa a chegar e abre sozinho logo que chega a primeira série, com todas as séries na coluna da esquerda; as outras continuam chegando | Funcionou (é o que se vê em `docs/botao-pacs-simulado.png`). Quem abre é o próprio IsiX. Para arrumar as séries pelo protocolo de neuro: **Plugins > Database > Protocolo de neuro**. |
 | Clicar de novo no mesmo exame | Abre sem buscar de novo, porque o exame já está completo no Mac. |
+| Pergunta **Should I activate it now?** | Os links estavam desligados (Passo 3). Clique em **Activate**: o exame é buscado em seguida. |
 | Aviso de servidor não encontrado | O nome do servidor em Settings > Locations não é o mesmo do OsiriX MD (Passo 2). |
 | Aviso de que o pedido não foi enviado | O link pede algo que o IsiX não consegue buscar. Me avise, sem mandar o número do exame. |
 | Aviso de que nada foi encontrado ou de falha na consulta | O servidor recusou o IsiX. Confira o AE Title e a porta do Passo 2. |

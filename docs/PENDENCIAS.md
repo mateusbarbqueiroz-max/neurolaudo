@@ -16,7 +16,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 
 | Pendência | Quando | Importância |
 | --- | --- | --- |
-| Instalar o IsiX e o complemento e testar o botão do PACS, seguindo `docs/GUIA-INSTALACAO.md` (IsiX 6.0.6 ou mais novo). Se o IsiX disser que o pedido não foi enviado, conferir no link se está escrito `StudyInstanceUID` (na transcrição de 15/11 veio `StudyInstancrUID`) | Quando houver um Mac com macOS 15+ (amigo ou Mac novo) | Alta: é o teste da Etapa 1 |
+| Instalar o IsiX e o complemento e testar o botão do PACS, seguindo `docs/GUIA-INSTALACAO.md` (IsiX 6.0.7 ou mais novo). Se o IsiX disser que o pedido não foi enviado, conferir no link se está escrito `StudyInstanceUID` (na transcrição de 15/11 veio `StudyInstancrUID`) | Quando houver um Mac com macOS 15+ (amigo ou Mac novo) | Alta: é o teste da Etapa 1 |
 | Usar as medidas em um exame real, desenhando as linhas à mão (Evans, linha média, ABC/2), e abrir o painel do ASPECTS | Junto com o item acima | Média: o cálculo já foi conferido dentro do IsiX com marcas desenhadas pelo complemento; faltam o uso à mão e as telas |
 | Mandar ao Claude os nomes das séries do serviço: com os exames reais já no IsiX, abrir **Plugins > Database > Nomes das séries (para ensinar o NeuroLaudo)**, tocar em **Copiar** e colar na conversa. Junto, dizer como gosta de ver a RM de encéfalo e a TC de crânio na tela (quantas janelas e qual série em cada) | Quando o Mac novo chegar e os primeiros exames tiverem passado pelo botão do PACS. Dá para adiantar pelo OsiriX MD, com a página explicativa entregue na conversa de 20/11/2026 | Média: com isso o IsiX passa a abrir o exame do botão já arrumado para neuro, e os nomes não reconhecidos são ensinados ao NeuroLaudo |
 | Conferir os valores das janelas de TC (encéfalo 40/80, AVC 40/40, subdural 75/215, osso 600/2800, angio-TC 200/700, partes moles 50/350) | Quando puder | Média |
@@ -37,6 +37,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 ## Feito
 
 - Aviso de segurança sobre a porta de comandos enviado pelo usuário ao autor do IsiX, por e-mail, em 20/11/2026.
+- IsiX 6.0.7 (20/11/2026) adotou as duas sugestões do aviso: links sem porta de rede, com opção própria, e porta de comandos atendendo só o próprio Mac de fábrica. Guia ajustado.
 
 - Pedido ao autor do IsiX atendido (18 e 19/11/2026): desde a 6.0.4 o link do botão do PACS
   funciona como está escrito (`ServerName`, `retrieveOnlyIfNeeded`, `then=Open`). O

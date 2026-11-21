@@ -156,28 +156,31 @@ Em Settings > Listener escolhe-se quais dos três esquemas o IsiX abre.
 
 ## Porta de comandos (XML-RPC)
 
-- Uma só opção, **Activate the URL support and HTTP XML-RPC Server on port**, liga
-  os links e um servidor HTTP na porta 8080.
-- Valor de fábrica de `httpXMLRPCServerAccessScope`: `2` (qualquer endereço), sem
-  senha. Registro de uma instalação nova (6.0.3, servidor Mac): "answering this Mac
-  and any address, WITHOUT a password". Na 6.0.6 o valor de fábrica continua `2`
-  (`Modules/IsiXPreferences/Sources/NetworkPreferences.swift`); agora o README do
-  IsiX o descreve, e o painel Listener avisa em vermelho.
-- Valores: `0` só este Mac, `1` rede local, `2` qualquer endereço. No painel:
-  **Answer messages from** → **This Mac only**, **Computers on the local network**,
-  **Any address**; e **Require a user name and password from other computers**.
-- Com `0`, o registro passa a "answering this Mac only". Os links continuam
-  funcionando: chegam ao IsiX como evento do próprio Mac, sem passar pelo servidor
-  (o README do IsiX recomenda **This Mac only** para quem só usa links).
-- O servidor publica `dbwindowfind` (o conteúdo do banco, com nomes e
-  identificadores de pacientes), `DownloadURL`, `Retrieve` e `KillOsiriX`. Na 6.0.6,
-  pedidos vindos de páginas da internet são recusados e `FindObject` com
-  `execute = Delete` pede confirmação no Mac.
-- O autor pediu que observações de segurança vão pelo canal privado do GitHub
-  (aba Security do repositório dele, "Report a vulnerability"), ou por e-mail ou
-  LinkedIn indicados no perfil dele. Em 20/11/2026 o canal privado não estava
-  ligado no repositório (a página dá erro 404 e a aba Security só diz "No security
-  policy detected"); sobram o e-mail e o LinkedIn do perfil.
+Desde a 6.0.7 (20/11/2026), links e porta de comandos são coisas separadas, cada
+uma com sua opção em Settings > Listener, as duas desligadas de fábrica
+(`Modules/IsiXPreferences/Sources/NetworkPreferences.swift`, README do IsiX):
+
+- **Open [ isix:// , horos:// , osirix:// ] links** (`LinkSchemeSupport`): os
+  links chegam ao IsiX como evento do próprio Mac e rodam dentro dele; nenhuma
+  porta de rede é aberta. Vale na hora. Com os links desligados, o primeiro
+  link faz o IsiX perguntar "Should I activate it now?" (botão **Activate**).
+- **Activate the HTTP XML-RPC Server on port** (`httpXMLRPCServer`, porta 8080):
+  a porta de comandos para outros computadores. O botão do PACS não precisa
+  dela. Ligada, atende **só este Mac** até se escolher outra coisa
+  (`httpXMLRPCServerAccessScope` registrado como `0`).
+- Instalações antigas em que a opção única de antes estava marcada ficam com as
+  duas ligadas e com o alcance que tinham (`LinkSupportMigration`).
+- Para o teste automático, o IsiX é aberto com `-LinkSchemeSupport YES
+  -httpXMLRPCServer NO`.
+
+Até a 6.0.6, uma só opção, **Activate the URL support and HTTP XML-RPC Server on
+port**, ligava os links e a porta; de fábrica a porta atendia qualquer endereço,
+sem senha (registro de uma instalação nova da 6.0.3: "answering this Mac and any
+address, WITHOUT a password"). A porta publica `dbwindowfind` (o banco, com nomes
+e identificadores de pacientes), `DownloadURL`, `Retrieve` e `KillOsiriX`. O
+aviso sobre isso foi enviado ao autor por e-mail em 20/11/2026, e a 6.0.7 adotou
+as duas sugestões: separar os links da porta e fazer a porta atender só o
+próprio Mac de fábrica.
 
 ## Conferido no servidor Mac do GitHub (15/11/2026)
 
