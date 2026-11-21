@@ -158,7 +158,8 @@ def build_comparison_figure(norms: Norms, comparison: Mapping, records: Sequence
     if repeatability:
         lines.append("Repetição: maior variação que só a repetição do exame produz em 95 % das vezes, medida em "
                      f"{repeatability.get('pessoas', '?')} voluntários escaneados várias vezes ({repeatability.get('fonte', '')}). "
-                     f"Usado o limite de {scenario}. Variação menor que esse limite pode ser só a imprecisão da medida.")
+                     f"Usado o limite de {scenario}. Variação menor que esse limite pode ser só a imprecisão da medida; "
+                     "maior mostra mudança real, não necessariamente anormal: compare com a inclinação das faixas.")
     lines.append("Os gráficos mostram o volume ajustado de cada exame do paciente medido neste Mac, na idade de cada exame.")
     y = 0.172
     for line in lines:

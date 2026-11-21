@@ -110,6 +110,10 @@ Como ler:
   do hipocampo na literatura é de cerca de 1,4 % em idosos saudáveis e de 4,7 %
   na doença de Alzheimer (metanálise de Barnes e colaboradores, 2009). Em
   intervalos curtos, a comparação só deve marcar perdas grandes.
+- **A marca não quer dizer anormal.** Ela diz que a variação é maior que o erro
+  da medida, ou seja, que houve mudança de verdade. Em intervalos longos, a
+  perda do envelhecimento normal também passa do limite; a inclinação das faixas
+  da referência nos gráficos mostra o que é esperado para a idade.
 - **Amígdalas**: limite de 7,5 a 8,8 %. Pouco úteis para acompanhar.
 - **Encéfalo, córtex e substância branca**: os mais estáveis.
 - **Aparelho puxa para um lado**: em um dos aparelhos (GE), o tálamo direito
