@@ -1,0 +1,119 @@
+name: Lesões no FLAIR (estudo)
+
+# Estudo de viabilidade da medida de lesões de substância branca no FLAIR, com o WMH-SynthSeg do
+# FreeSurfer 8.2 (rede neural em PyTorch). Mede tempo e memória em Linux e no Mac (Apple Silicon) em
+# FLAIR 3D públicos do ON-Harmony (OpenNeuro ds004712, CC0) e lista os arquivos do banco público do
+# desafio MICCAI WMH 2017 (DataverseNL), que tem lesões marcadas à mão. Nenhum dado de paciente.
+# Acionado à mão. Uso em pesquisa.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FS_RAW: https://raw.githubusercontent.com/freesurfer/freesurfer/v8.2.0/mri_WMHsynthseg/WMHSynthSeg
+  MODELO: https://ftp.nmr.mgh.harvard.edu/pub/dist/lcnpublic/dist/WMH-SynthSeg/WMH-SynthSeg_v10_231110.pth
+  S3: https://s3.amazonaws.com/openneuro.org/ds004712
+  TORCH: "2.5.1"
+  # FLAIR 3D de um voluntário em dois aparelhos (Siemens Prisma e GE).
+  FLAIRS: >-
+    sub-13192/ses-OXF1PRI001/anat/sub-13192_ses-OXF1PRI001_T2w.nii.gz
+    sub-13192/ses-NOT3GEM001/anat/sub-13192_ses-NOT3GEM001_FLAIR.nii.gz
+
+jobs:
+  viabilidade:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { maquina: ubuntu-latest, nome: linux }
+          - { maquina: xcode-27, nome: mac }
+    runs-on: ${{ matrix.maquina }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar o PyTorch e o WMH-SynthSeg
+        run: |
+          mkdir -p "$RUNNER_TEMP/saida"
+          if [ "${{ matrix.nome }}" = "linux" ]; then
+            python -m pip install --quiet "torch==$TORCH" --index-url https://download.pytorch.org/whl/cpu
+          else
+            python -m pip install --quiet "torch==$TORCH"
+          fi
+          python -m pip install --quiet "numpy<2" nibabel scipy
+          W="$RUNNER_TEMP/wmh"
+          mkdir -p "$W/unet3d" "$W/fs/models"
+          for f in inference.py utils.py unet3d/__init__.py unet3d/model.py unet3d/buildingblocks.py unet3d/se.py unet3d/utils.py; do
+            curl -fsSL --retry 3 -o "$W/$f" "$FS_RAW/$f"
+          done
+          curl -fsSL --retry 3 -o "$W/fs/models/WMH-SynthSeg_v10_231110.pth" "$MODELO"
+          ls -la "$W/fs/models"
+          { python -c "import torch; print('torch', torch.__version__, 'núcleos', torch.get_num_threads())"
+            shasum -a 256 "$W/fs/models/WMH-SynthSeg_v10_231110.pth"
+            wc -c < "$W/fs/models/WMH-SynthSeg_v10_231110.pth"
+          } | tee "$RUNNER_TEMP/saida/${{ matrix.nome }}-instalacao.txt"
+
+      - name: Baixar os FLAIR públicos
+        run: |
+          mkdir -p "$RUNNER_TEMP/flair"
+          for f in $FLAIRS; do
+            curl -fsSL --retry 3 -o "$RUNNER_TEMP/flair/$(basename "$f")" "$S3/$f"
+          done
+          ls -la "$RUNNER_TEMP/flair"
+
+      - name: Banco do desafio WMH 2017 (só a lista de arquivos)
+        if: matrix.nome == 'linux'
+        run: |
+          curl -fsS --max-time 120 -o "$RUNNER_TEMP/dv.json" \
+            "https://dataverse.nl/api/datasets/:persistentId/?persistentId=doi:10.34894/AECRSD" || { echo "sem acesso ao DataverseNL"; exit 0; }
+          python - "$RUNNER_TEMP/dv.json" > "$RUNNER_TEMP/saida/desafio-wmh-arquivos.txt" <<'EOF'
+          import json, sys
+          v = json.load(open(sys.argv[1]))["data"]["latestVersion"]
+          print("licença:", v.get("license"))
+          for key in ("termsOfUse", "termsOfAccess", "restrictions", "fileAccessRequest"):
+              if v.get(key):
+                  print(key + ":", str(v[key])[:500])
+          for f in v["files"]:
+              d = f["dataFile"]
+              print(d["id"], d["filename"], round(d.get("filesize", 0) / 1e6, 1), "MB", "restrito" if f.get("restricted") else "livre")
+          EOF
+          cat "$RUNNER_TEMP/saida/desafio-wmh-arquivos.txt"
+
+      - name: Segmentar as lesões
+        timeout-minutes: 90
+        run: |
+          export FREESURFER_HOME="$RUNNER_TEMP/wmh/fs"
+          if [ "${{ matrix.nome }}" = "mac" ]; then MEDIR="/usr/bin/time -l"; else MEDIR="/usr/bin/time -v"; fi
+          sysctl -n hw.memsize 2>/dev/null || free -g | head -2
+          for f in "$RUNNER_TEMP"/flair/*.nii.gz; do
+            n="${{ matrix.nome }}-$(basename "$f" .nii.gz)"
+            echo "=== $n (com recorte de 192 x 224 x 192 mm)"
+            $MEDIR python "$RUNNER_TEMP/wmh/inference.py" --i "$f" --o "$RUNNER_TEMP/saida/$n-seg.nii.gz" \
+              --csv_vols "$RUNNER_TEMP/saida/$n-volumes.csv" --threads -1 --crop \
+              > "$RUNNER_TEMP/saida/$n-registro.txt" 2>&1 || echo "falhou"
+            grep -E "Elapsed|Maximum resident|real |maximum resident|peak memory|error|Error" "$RUNNER_TEMP/saida/$n-registro.txt" | tail -6
+            [ -f "$RUNNER_TEMP/saida/$n-volumes.csv" ] && python -c "
+          import csv, sys
+          row = next(csv.DictReader(open(sys.argv[1])))
+          print('volume intracraniano (mL):', round(float(row['Intracranial-volume']) / 1000, 1))
+          print('lesões, WMH (mL):', round(float(row['WMH(77)']) / 1000, 2))" "$RUNNER_TEMP/saida/$n-volumes.csv"
+          done
+
+      - name: Publicar
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd "$RUNNER_TEMP/saida" || exit 0
+          rm -f ./*-seg.nii.gz
+          find . -maxdepth 1 -type f -empty -delete
+          ls -la
+          gh release view teste-lesoes >/dev/null 2>&1 || gh release create teste-lesoes --title "Teste das lesões no FLAIR (automático)" \
+            --prerelease --latest=false --notes "Estudo de viabilidade da medida de lesões de substância branca no FLAIR, em exames públicos (ON-Harmony, CC0). Nenhum dado de paciente. Uso em pesquisa." || true
+          if [ -n "$(ls -A .)" ]; then gh release upload teste-lesoes ./* --clobber; fi
