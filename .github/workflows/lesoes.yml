@@ -45,7 +45,7 @@ jobs:
           else
             python -m pip install --quiet "torch==$TORCH"
           fi
-          python -m pip install --quiet "numpy<2" nibabel scipy
+          python -m pip install --quiet "numpy<2" nibabel scipy h5py
           W="$RUNNER_TEMP/wmh"
           mkdir -p "$W/unet3d" "$W/fs/models"
           for f in inference.py utils.py unet3d/__init__.py unet3d/model.py unet3d/buildingblocks.py unet3d/se.py unet3d/utils.py; do
@@ -97,11 +97,11 @@ jobs:
               --csv_vols "$RUNNER_TEMP/saida/$n-volumes.csv" --threads -1 --crop \
               > "$RUNNER_TEMP/saida/$n-registro.txt" 2>&1 || echo "falhou"
             grep -E "Elapsed|Maximum resident|real |maximum resident|peak memory|error|Error" "$RUNNER_TEMP/saida/$n-registro.txt" | tail -6
-            [ -f "$RUNNER_TEMP/saida/$n-volumes.csv" ] && python -c "
+            if [ -f "$RUNNER_TEMP/saida/$n-volumes.csv" ]; then python -c "
           import csv, sys
           row = next(csv.DictReader(open(sys.argv[1])))
           print('volume intracraniano (mL):', round(float(row['Intracranial-volume']) / 1000, 1))
-          print('lesões, WMH (mL):', round(float(row['WMH(77)']) / 1000, 2))" "$RUNNER_TEMP/saida/$n-volumes.csv"
+          print('lesões, WMH (mL):', round(float(row['WMH(77)']) / 1000, 2))" "$RUNNER_TEMP/saida/$n-volumes.csv"; fi
           done
 
       - name: Publicar
