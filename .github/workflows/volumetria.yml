@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       onde:
-        description: "linux (8 voluntários), miniatura (recorte em Linux e Mac), ambos ou diagnostico"
+        description: "linux (8 voluntários), miniatura (recorte em Linux e Mac), ambos, diagnostico ou repeticao (20 voluntários em vários aparelhos)"
         default: "linux"
 
 permissions:
@@ -222,3 +222,77 @@ jobs:
               --notes "Resultado do último teste automático da volumetria em um exame público (banco IXI, CC BY-SA 3.0). Nenhum dado de paciente. Uso em pesquisa, não validado para diagnóstico." || true
             gh release upload teste-volumetria linux-diagnostico.txt --clobber
           fi
+
+  repeticao:
+    # Quanto os volumes variam só por repetir o exame. ON-Harmony (OpenNeuro ds004712, CC0): 20 voluntários
+    # escaneados em 6 aparelhos de 3 T (Siemens, Philips, GE); 10 deles, mais 5 vezes no mesmo aparelho.
+    # Uma pessoa por máquina, em paralelo; o resumo sai no trabalho seguinte.
+    if: inputs.onde == 'repeticao'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        pessoa: ["03286", "03997", "10975", "12813", "13192", "13305", "14221", "14229", "14230", "14482",
+                 "15320", "16745", "16766", "16793", "16794", "16841", "16842", "16974", "16975", "16981"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar o motor de volumetria
+        run: |
+          export NEUROLAUDO_MOTOR="$RUNNER_TEMP/motor"
+          echo "NEUROLAUDO_MOTOR=$NEUROLAUDO_MOTOR" >> "$GITHUB_ENV"
+          NEUROLAUDO_FONTE="$GITHUB_WORKSPACE/engine" bash mac/instalar-volumetria.sh
+      - name: Baixar os T1 da pessoa
+        run: |
+          S=https://s3.amazonaws.com/openneuro.org
+          P="sub-${{ matrix.pessoa }}"
+          mkdir -p "$RUNNER_TEMP/t1" && cd "$RUNNER_TEMP/t1"
+          LINHA="$(curl -fsS --retry 3 "$S/ds004712/participants.tsv" | tr -d '\r' | awk -F'\t' -v p="$P" '$1==p')"
+          echo "SEXO=$(echo "$LINHA" | cut -f2)" >> "$GITHUB_ENV"
+          echo "IDADE=$(echo "$LINHA" | cut -f3)" >> "$GITHUB_ENV"
+          for SES in $(curl -fsS --retry 3 "$S?list-type=2&prefix=ds004712/$P/ses-&delimiter=/" \
+                       | grep -o "<Prefix>ds004712/$P/ses-[^<]*" | sed "s#.*/ses-##; s#/##"); do
+            curl -fsSL --retry 3 -o "$SES.nii.gz" "$S/ds004712/$P/ses-$SES/anat/${P}_ses-${SES}_T1w.nii.gz" \
+              || { echo "sem T1 na sessão $SES"; rm -f "$SES.nii.gz"; }
+          done
+          echo "$LINHA"; ls -la
+          test "$(ls *.nii.gz | wc -l)" -ge 2
+      - name: Medir
+        run: |
+          sudo sysctl -w vm.overcommit_memory=1 >/dev/null
+          "$NEUROLAUDO_MOTOR/venv/bin/python" engine/scripts/validate_retest.py "$RUNNER_TEMP/t1" "$RUNNER_TEMP/saida" \
+            --sujeito "${{ matrix.pessoa }}" --sexo "$SEXO" --idade "$IDADE"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: repeticao-${{ matrix.pessoa }}
+          path: ${{ runner.temp }}/saida/*.json
+          if-no-files-found: warn
+
+  repeticao-resumo:
+    if: always() && inputs.onde == 'repeticao'
+    needs: repeticao
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: repeticao-*
+          path: ${{ runner.temp }}/medidas
+          merge-multiple: true
+      - name: Resumir
+        run: PYTHONPATH=engine python3 engine/scripts/retest_summary.py "$RUNNER_TEMP/medidas" "$RUNNER_TEMP/resumo"
+      - name: Publicar
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          test -d "$RUNNER_TEMP/resumo" || exit 1
+          cd "$RUNNER_TEMP/resumo"
+          gh release view teste-volumetria >/dev/null 2>&1 || gh release create teste-volumetria \
+            --title "Teste da volumetria (automático)" --prerelease --latest=false \
+            --notes "Resultados dos testes automáticos da volumetria em exames públicos. Nenhum dado de paciente. Uso em pesquisa, não validado para diagnóstico." || true
+          find . -maxdepth 1 -type f -empty -delete
+          gh release upload teste-volumetria ./* --clobber
