@@ -1,0 +1,101 @@
+name: Mac remoto (usar o IsiX pelo navegador)
+
+# Liga o compartilhamento de tela do servidor Mac do GitHub e o expõe por um
+# endereço temporário, para o usuário usar o IsiX com o NeuroLaudo pelo
+# navegador do computador. Só exames de teste (fantoma); nunca exames reais.
+#
+# O endereço e a senha são gerados aqui e saem cifrados no registro (que é
+# público), com a chave pública passada em `chave`; só quem tem a chave
+# privada (a sessão do Claude) consegue lê-los. Com `minutos` = 0 só confere se
+# tudo funciona e encerra.
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: "Minutos de sessão (0 = só conferir se funciona)"
+        default: "0"
+      chave:
+        description: "Chave pública RSA, em base64, para cifrar o endereço e a senha"
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  remoto:
+    runs-on: xcode-27
+    timeout-minutes: 150
+    env:
+      SAIDA: ${{ github.workspace }}/saida
+    steps:
+      - name: Ligar o compartilhamento de tela
+        run: |
+          mkdir -p "$SAIDA"
+          sw_vers
+          SENHA="$(LC_ALL=C tr -dc 'A-HJ-NP-Za-km-z2-9' < /dev/urandom | head -c 8)"
+          echo "::add-mask::$SENHA"
+          echo "SENHA=$SENHA" >> "$GITHUB_ENV"
+          K=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
+          sudo "$K" -activate -configure -access -on -privs -all -restart -agent -allowAccessFor -allUsers 2>&1 | tail -4
+          sudo "$K" -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "$SENHA" 2>&1 | tail -3
+          sudo launchctl enable system/com.apple.screensharing 2>/dev/null || true
+          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+          for i in $(seq 1 12); do nc -z 127.0.0.1 5900 && break; sleep 5; done
+          nc -z 127.0.0.1 5900 && echo "PORTA 5900: aberta" || echo "PORTA 5900: fechada"
+
+      - name: Conferir por dentro com um cliente de compartilhamento de tela
+        run: |
+          python3 -m pip install --quiet --break-system-packages vncdotool 2>/dev/null || python3 -m pip install --quiet vncdotool
+          timeout 60 vncdo -s 127.0.0.1::5900 -p "$SENHA" capture "$SAIDA/remoto-pelo-vnc.png" && echo "CLIENTE VNC: entrou e capturou a tela" || echo "CLIENTE VNC: falhou"
+          ls -la "$SAIDA" || true
+
+      - name: Endereço temporário pelo navegador
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o novnc.tgz https://github.com/novnc/noVNC/archive/refs/tags/v1.5.0.tar.gz && tar -xzf novnc.tgz
+          python3 -m pip install --quiet --break-system-packages websockify 2>/dev/null || python3 -m pip install --quiet websockify
+          nohup websockify --web "$RUNNER_TEMP/noVNC-1.5.0" 6080 127.0.0.1:5900 > websockify.log 2>&1 &
+          curl -fsSL -o cloudflared.tgz https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz
+          tar -xzf cloudflared.tgz && chmod +x cloudflared && ./cloudflared --version
+          nohup ./cloudflared tunnel --no-autoupdate --url http://127.0.0.1:6080 > cloudflared.log 2>&1 &
+          for i in $(seq 1 30); do URL="$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' cloudflared.log | head -1)"; [ -n "$URL" ] && break; sleep 2; done
+          echo "::add-mask::$URL"
+          echo "URL=$URL" >> "$GITHUB_ENV"
+          for i in $(seq 1 20); do CODE="$(curl -s -o /dev/null -w '%{http_code}' "$URL/vnc.html")"; [ "$CODE" = "200" ] && break; sleep 3; done
+          echo "PÁGINA PELO ENDEREÇO TEMPORÁRIO: $CODE"
+          tail -5 websockify.log || true
+
+      - name: Endereço e senha, cifrados
+        if: inputs.chave != ''
+        env:
+          CHAVE: ${{ inputs.chave }}
+        run: |
+          echo "$CHAVE" | base64 -d > "$RUNNER_TEMP/chave.pub"
+          LINK="$URL/vnc.html?autoconnect=1&resize=scale&reconnect=1"
+          printf '%s\n%s\n' "$LINK" "$SENHA" | openssl pkeyutl -encrypt -pubin -inkey "$RUNNER_TEMP/chave.pub" -pkeyopt rsa_padding_mode:oaep | base64 | tr -d '\n' > "$SAIDA/cifrado.txt"
+          echo "CIFRADO: $(cat "$SAIDA/cifrado.txt")"
+
+      - name: Publicar a conferência
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd "$SAIDA"
+          ls -la
+          gh release view teste-isix >/dev/null 2>&1 || gh release create teste-isix --title "Teste dentro do IsiX (automático)" --prerelease --latest=false --notes "Capturas e registros dos testes no servidor Mac. Só exames de teste." || true
+          if [ -n "$(ls -A .)" ]; then gh release upload teste-isix ./* --clobber; fi
+
+      - name: Manter a sessão aberta
+        if: inputs.minutos != '0'
+        env:
+          MINUTOS: ${{ inputs.minutos }}
+        run: |
+          case "$MINUTOS" in ''|*[!0-9]*) echo "minutos inválido: $MINUTOS"; exit 1;; esac
+          [ "$MINUTOS" -le 120 ] || MINUTOS=120
+          FIM=$(( $(date +%s) + MINUTOS * 60 ))
+          while [ "$(date +%s)" -lt "$FIM" ]; do
+            echo "sessão aberta, faltam $(( (FIM - $(date +%s)) / 60 )) minuto(s)"
+            sleep 60
+          done
