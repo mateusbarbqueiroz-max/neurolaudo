@@ -36,7 +36,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Volumetria: ajustar a página de comparação com o exame anterior (palavras, estruturas, limites) | opinião do usuário e primeiro uso em exame real |
 | Volumetria: medir o limite de repetição em idosos e em 1,5 T, se aparecer um banco público com exames repetidos nessas condições | dados públicos |
 | Laudo: o usuário dita no Laudite, com máscaras e frases prontas. O NeuroLaudo entrega o texto das medidas e da volumetria no formato das máscaras dele, pronto para colar | máscaras do usuário |
-| Lesões de substância branca no FLAIR: o estudo (`docs/LESOES-FLAIR.md`) mostrou que roda num Mac de 16 GB com a versão por fatias; falta a medida de repetição e a decisão do usuário sobre a utilidade | repetição em andamento; opinião do usuário |
+| Lesões de substância branca no FLAIR: o estudo (`docs/LESOES-FLAIR.md`) mostrou que roda num Mac de 16 GB com a versão por fatias. A repetição em 164 exames públicos deu ±2,3 mL no mesmo aparelho e ±4,6 mL entre aparelhos, com mediana de 7,3 mL em voluntários saudáveis. Falta a decisão do usuário sobre a utilidade | opinião do usuário |
 
 ## Feito
 

@@ -39,9 +39,34 @@ vermelho, o que a rede marcou). Ou seja: em volumes pequenos, o número depende
 muito do aparelho e da sequência, e inclui o que muitos leitores chamariam de
 achado fisiológico.
 
-**Repetição em 20 voluntários.** Em andamento: os mesmos 20 voluntários da
-volumetria, em 6 aparelhos de 3 T, e 10 deles mais 5 vezes no mesmo aparelho
-(`lesoes.yml -f etapa=repeticao`).
+**Repetição em 20 voluntários.** Os mesmos 20 voluntários saudáveis da
+volumetria (19 a 50 anos), cada um em 6 aparelhos de 3 T (8 aparelhos no total:
+Siemens Prisma e Trio, Philips Achieva e Ingenia, GE MR750 e Premier), e 9 deles
+mais 5 vezes no mesmo aparelho. FLAIR 3D de cerca de 1 mm em todos; um voluntário
+só tinha FLAIR 2D no GE MR750 e esse exame ficou de fora. Foram 164 exames, cerca
+de 6 minutos cada no servidor Linux do GitHub (até 6,9 GB de memória).
+
+| | Volume de lesões |
+| --- | --- |
+| Nos voluntários saudáveis | mediana 7,3 mL (2,6 a 19,0 mL) |
+| Repetição no mesmo aparelho | variação de até ±2,3 mL (95 % das vezes) |
+| Repetição em aparelhos diferentes | variação de até ±4,6 mL |
+
+- **Saudável não é zero.** Todos os 20 tiveram pelo menos 2,6 mL. Os de 35 a
+  50 anos ficaram, em média por pessoa, entre 7 e 16 mL; os de 19 a 29 anos,
+  entre 3 e 8 mL.
+- **O aparelho pesa.** Na média, cada aparelho desloca o volume entre −1,3 mL
+  (GE MR750) e +1,3 mL (GE Premier). Na mesma pessoa, o volume chegou a dobrar
+  de um aparelho para outro: 5,0 mL no Philips Achieva e 11,6 mL no Philips
+  Ingenia, no mesmo voluntário de 25 anos.
+- **Mudança pequena não aparece.** Uma lesão nova de esclerose múltipla costuma
+  ter bem menos de 1 mL (uma esfera de 1 cm tem 0,5 mL). Mudanças desse tamanho
+  ficam dentro da variação da própria medida, mesmo no mesmo aparelho. O volume
+  total não substitui a comparação lesão a lesão.
+
+O volume é a soma das probabilidades que a rede dá a cada voxel, como no
+programa original. Contar só os voxels rotulados como lesão dá quase o mesmo
+(mediana 6,9 mL; limites ±2,3 e ±4,6 mL).
 
 ## O que não dá para conferir daqui
 
