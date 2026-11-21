@@ -8,6 +8,10 @@ name: Lesões no FLAIR (estudo)
 
 on:
   workflow_dispatch:
+    inputs:
+      onde:
+        description: "linux, mac ou ambos"
+        default: "ambos"
 
 permissions:
   contents: write
@@ -39,6 +43,7 @@ jobs:
           python-version: "3.11"
 
       - name: Instalar o PyTorch e o WMH-SynthSeg
+        if: inputs.onde == 'ambos' || inputs.onde == matrix.nome
         run: |
           mkdir -p "$RUNNER_TEMP/saida"
           if [ "${{ matrix.nome }}" = "linux" ]; then
@@ -46,7 +51,7 @@ jobs:
           else
             python -m pip install --quiet "torch==$TORCH"
           fi
-          python -m pip install --quiet "numpy<2" nibabel scipy h5py
+          python -m pip install --quiet "numpy<2" nibabel scipy h5py matplotlib
           W="$RUNNER_TEMP/wmh"
           mkdir -p "$W/unet3d" "$W/fs/models"
           for f in inference.py utils.py unet3d/__init__.py unet3d/model.py unet3d/buildingblocks.py unet3d/se.py unet3d/utils.py; do
@@ -60,6 +65,7 @@ jobs:
           } | tee "$RUNNER_TEMP/saida/${{ matrix.nome }}-instalacao.txt"
 
       - name: Baixar os FLAIR públicos
+        if: inputs.onde == 'ambos' || inputs.onde == matrix.nome
         run: |
           mkdir -p "$RUNNER_TEMP/flair"
           for f in $FLAIRS; do
@@ -68,12 +74,14 @@ jobs:
           ls -la "$RUNNER_TEMP/flair"
 
       - name: Conferir a versão por fatias contra a rede original
+        if: inputs.onde == 'ambos' || inputs.onde == matrix.nome
         run: |
           python engine/scripts/wmh_lowmem.py --codigo "$RUNNER_TEMP/wmh" \
             --modelo "$RUNNER_TEMP/wmh/fs/models/WMH-SynthSeg_v10_231110.pth" --conferir \
             | tee "$RUNNER_TEMP/saida/${{ matrix.nome }}-conferencia.txt"
 
       - name: Segmentar as lesões (versão por fatias)
+        if: inputs.onde == 'ambos' || inputs.onde == matrix.nome
         timeout-minutes: 100
         run: |
           if [ "${{ matrix.nome }}" = "mac" ]; then MEDIR="/usr/bin/time -l"; else MEDIR="/usr/bin/time -v"; fi
@@ -83,6 +91,7 @@ jobs:
             $MEDIR python engine/scripts/wmh_lowmem.py --codigo "$RUNNER_TEMP/wmh" \
               --modelo "$RUNNER_TEMP/wmh/fs/models/WMH-SynthSeg_v10_231110.pth" \
               --i "$f" --o "$RUNNER_TEMP/saida/$n-seg.nii.gz" --csv "$RUNNER_TEMP/saida/$n-volumes.csv" \
+              --figura "$RUNNER_TEMP/saida/$n-lesoes.png" \
               > "$RUNNER_TEMP/saida/$n-registro.txt" 2>&1 || echo "falhou"
             grep -E "lesões|torch |Elapsed|Maximum resident|real |maximum resident|Error|error|Killed" "$RUNNER_TEMP/saida/$n-registro.txt" | tail -8
           done

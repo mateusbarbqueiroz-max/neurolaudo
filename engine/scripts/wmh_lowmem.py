@@ -189,7 +189,30 @@ def logits(torch, model, volume):
 
 # MARK: o fluxo do inference.py original, com a rede trocada pela versão por fatias
 
-def segment(torch, model, utils, path_in, path_out, csv_path):
+def figure(path, image, seg, title):
+    """Cortes axiais do FLAIR (1 mm, alinhado) com as lesões em vermelho, em convenção radiológica."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    brain = np.argwhere(seg > 0)
+    k_low, k_high = brain[:, 2].min(), brain[:, 2].max()
+    ks = np.linspace(k_low + 0.35 * (k_high - k_low), k_low + 0.85 * (k_high - k_low), 8).astype(int)
+    top = np.percentile(image[seg > 0], 99.5)
+    fig, axes = plt.subplots(2, 4, figsize=(12, 7), facecolor="black")
+    for ax, k in zip(axes.ravel(), ks):
+        slice_ = np.clip(image[:, :, k] / top, 0, 1)[::-1, ::-1].T
+        lesion = (seg[:, :, k] == 77)[::-1, ::-1].T
+        rgb = np.stack([slice_] * 3, axis=-1)
+        rgb[lesion] = 0.35 * rgb[lesion] + 0.65 * np.array([1.0, 0.1, 0.1])
+        ax.imshow(rgb, interpolation="nearest")
+        ax.set_title(f"corte {k}", color="white", fontsize=8)
+        ax.axis("off")
+    fig.suptitle(title, color="white", fontsize=10)
+    fig.savefig(path, dpi=80, facecolor="black")
+    plt.close(fig)
+
+
+def segment(torch, model, utils, path_in, path_out, csv_path, figure_path=None):
     image, aff = utils.MRIread(path_in)
     image_torch = torch.tensor(np.squeeze(image).astype(float))
     while len(image_torch.shape) > 3:
@@ -263,6 +286,15 @@ def segment(torch, model, utils, path_in, path_out, csv_path):
             fh.write("Input-file,Intracranial-volume," + ",".join(f"{n}({lab})" for n, lab in zip(NAMES, LABELS) if lab) + "\n")
             fh.write(f"{path_out},{np.sum(vols[1:])}," + ",".join(str(v) for v, lab in zip(vols, LABELS) if lab) + "\n")
     wmh = vols[LABELS.index(77)] / 1000
+    from scipy import ndimage
+    mask = seg == 77
+    components, count = ndimage.label(mask, structure=np.ones((3, 3, 3)))
+    sizes = np.sort(np.bincount(components.ravel())[1:])[::-1] if count else np.array([0])
+    print(f"lesões rotuladas: {mask.sum() / 1000:.2f} mL em {count} focos (maiores: {', '.join(str(v) for v in sizes[:5])} voxels; "
+          f"focos de até 3 voxels: {int((sizes <= 3).sum())})", flush=True)
+    if figure_path:
+        figure(figure_path, upscaled.numpy(), seg, f"{path_in.split('/')[-1]}: lesões {wmh:.2f} mL (soma das probabilidades), "
+               f"{mask.sum() / 1000:.2f} mL rotuladas")
     print(f"lesões (WMH): {wmh:.2f} mL; volume intracraniano {np.sum(vols[1:]) / 1000:.1f} mL; "
           f"passo preliminar {first_pass:.0f} s, segmentação {second_pass:.0f} s; memória máxima {peak_gb():.1f} GB", flush=True)
     return wmh
@@ -294,6 +326,7 @@ def main(argv=None) -> int:
     parser.add_argument("--i")
     parser.add_argument("--o")
     parser.add_argument("--csv")
+    parser.add_argument("--figura")
     parser.add_argument("--threads", type=int, default=0)
     parser.add_argument("--conferir", action="store_true")
     args = parser.parse_args(argv)
@@ -313,7 +346,7 @@ def main(argv=None) -> int:
     with torch.no_grad():
         if args.conferir:
             return 0 if check(torch, model) else 1
-        segment(torch, model, utils, args.i, args.o, args.csv)
+        segment(torch, model, utils, args.i, args.o, args.csv, args.figura)
     return 0
 
 
