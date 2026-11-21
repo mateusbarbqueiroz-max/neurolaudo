@@ -2,9 +2,9 @@ name: Lesões no FLAIR (estudo)
 
 # Estudo de viabilidade da medida de lesões de substância branca no FLAIR, com o WMH-SynthSeg do
 # FreeSurfer 8.2 (rede neural em PyTorch). Mede tempo e memória em Linux e no Mac (Apple Silicon) em
-# FLAIR 3D públicos do ON-Harmony (OpenNeuro ds004712, CC0) e lista os arquivos do banco público do
-# desafio MICCAI WMH 2017 (DataverseNL), que tem lesões marcadas à mão. Nenhum dado de paciente.
-# Acionado à mão. Uso em pesquisa.
+# FLAIR 3D públicos do ON-Harmony (OpenNeuro ds004712, CC0). O programa original passou de 16 GB em Linux;
+# aqui roda a versão por fatias (engine/scripts/wmh_lowmem.py), conferida antes contra a rede original em
+# volumes pequenos. Nenhum dado de paciente. Acionado à mão. Uso em pesquisa.
 
 on:
   workflow_dispatch:
@@ -33,6 +33,7 @@ jobs:
     runs-on: ${{ matrix.maquina }}
     timeout-minutes: 120
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -66,42 +67,24 @@ jobs:
           done
           ls -la "$RUNNER_TEMP/flair"
 
-      - name: Banco do desafio WMH 2017 (só a lista de arquivos)
-        if: matrix.nome == 'linux'
+      - name: Conferir a versão por fatias contra a rede original
         run: |
-          curl -fsS --max-time 120 -o "$RUNNER_TEMP/dv.json" \
-            "https://dataverse.nl/api/datasets/:persistentId/?persistentId=doi:10.34894/AECRSD" || { echo "sem acesso ao DataverseNL"; exit 0; }
-          python - "$RUNNER_TEMP/dv.json" > "$RUNNER_TEMP/saida/desafio-wmh-arquivos.txt" <<'EOF'
-          import json, sys
-          v = json.load(open(sys.argv[1]))["data"]["latestVersion"]
-          print("licença:", v.get("license"))
-          for key in ("termsOfUse", "termsOfAccess", "restrictions", "fileAccessRequest"):
-              if v.get(key):
-                  print(key + ":", str(v[key])[:500])
-          for f in v["files"]:
-              d = f["dataFile"]
-              print(d["id"], d["filename"], round(d.get("filesize", 0) / 1e6, 1), "MB", "restrito" if f.get("restricted") else "livre")
-          EOF
-          cat "$RUNNER_TEMP/saida/desafio-wmh-arquivos.txt"
+          python engine/scripts/wmh_lowmem.py --codigo "$RUNNER_TEMP/wmh" \
+            --modelo "$RUNNER_TEMP/wmh/fs/models/WMH-SynthSeg_v10_231110.pth" --conferir \
+            | tee "$RUNNER_TEMP/saida/${{ matrix.nome }}-conferencia.txt"
 
-      - name: Segmentar as lesões
-        timeout-minutes: 90
+      - name: Segmentar as lesões (versão por fatias)
+        timeout-minutes: 100
         run: |
-          export FREESURFER_HOME="$RUNNER_TEMP/wmh/fs"
           if [ "${{ matrix.nome }}" = "mac" ]; then MEDIR="/usr/bin/time -l"; else MEDIR="/usr/bin/time -v"; fi
-          sysctl -n hw.memsize 2>/dev/null || free -g | head -2
           for f in "$RUNNER_TEMP"/flair/*.nii.gz; do
             n="${{ matrix.nome }}-$(basename "$f" .nii.gz)"
-            echo "=== $n (com recorte de 192 x 224 x 192 mm)"
-            $MEDIR python "$RUNNER_TEMP/wmh/inference.py" --i "$f" --o "$RUNNER_TEMP/saida/$n-seg.nii.gz" \
-              --csv_vols "$RUNNER_TEMP/saida/$n-volumes.csv" --threads -1 --crop \
+            echo "=== $n"
+            $MEDIR python engine/scripts/wmh_lowmem.py --codigo "$RUNNER_TEMP/wmh" \
+              --modelo "$RUNNER_TEMP/wmh/fs/models/WMH-SynthSeg_v10_231110.pth" \
+              --i "$f" --o "$RUNNER_TEMP/saida/$n-seg.nii.gz" --csv "$RUNNER_TEMP/saida/$n-volumes.csv" \
               > "$RUNNER_TEMP/saida/$n-registro.txt" 2>&1 || echo "falhou"
-            grep -E "Elapsed|Maximum resident|real |maximum resident|peak memory|error|Error" "$RUNNER_TEMP/saida/$n-registro.txt" | tail -6
-            if [ -f "$RUNNER_TEMP/saida/$n-volumes.csv" ]; then python -c "
-          import csv, sys
-          row = next(csv.DictReader(open(sys.argv[1])))
-          print('volume intracraniano (mL):', round(float(row['Intracranial-volume']) / 1000, 1))
-          print('lesões, WMH (mL):', round(float(row['WMH(77)']) / 1000, 2))" "$RUNNER_TEMP/saida/$n-volumes.csv"; fi
+            grep -E "lesões|torch |Elapsed|Maximum resident|real |maximum resident|Error|error|Killed" "$RUNNER_TEMP/saida/$n-registro.txt" | tail -8
           done
 
       - name: Publicar
