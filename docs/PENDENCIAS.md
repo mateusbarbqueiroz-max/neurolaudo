@@ -19,6 +19,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Instalar o IsiX e o complemento e testar o botão do PACS, seguindo `docs/GUIA-INSTALACAO.md` (IsiX 6.0.7 ou mais novo). Se o IsiX disser que o pedido não foi enviado, conferir no link se está escrito `StudyInstanceUID` (na transcrição de 15/11 veio `StudyInstancrUID`) | Quando houver um Mac com macOS 15+ (amigo ou Mac novo) | Alta: é o teste da Etapa 1 |
 | Usar as medidas em um exame real, desenhando as linhas à mão (Evans, linha média, ABC/2), e abrir o painel do ASPECTS | Junto com o item acima | Média: o cálculo já foi conferido dentro do IsiX com marcas desenhadas pelo complemento; faltam o uso à mão e as telas |
 | Mandar ao Claude os nomes das séries do serviço: com os exames reais já no IsiX, abrir **Plugins > Database > Nomes das séries (para ensinar o NeuroLaudo)**, tocar em **Copiar** e colar na conversa. Junto, dizer como gosta de ver a RM de encéfalo e a TC de crânio na tela (quantas janelas e qual série em cada) | Quando o Mac novo chegar e os primeiros exames tiverem passado pelo botão do PACS. Dá para adiantar pelo OsiriX MD, com a página explicativa entregue na conversa de 20/11/2026 | Média: com isso o IsiX passa a abrir o exame do botão já arrumado para neuro, e os nomes não reconhecidos são ensinados ao NeuroLaudo |
+| Mandar 2 ou 3 máscaras de laudo que usa no Laudite (RM de crânio, TC de crânio), sem dados de paciente | Quando puder; não precisa de Mac | Alta para a etapa do laudo |
 | Conferir os valores das janelas de TC (encéfalo 40/80, AVC 40/40, subdural 75/215, osso 600/2800, angio-TC 200/700, partes moles 50/350) | Quando puder | Média |
 | Ver os exemplos da volumetria (`docs/exemplo-volumetria.png`, `docs/exemplo-conferencia.png`, `docs/volumetria-no-isix.png`, `docs/exemplo-comparacao.png`) e dizer o que mudar: estruturas, ordem, cores, palavras, frase para o laudo | Quando puder; não precisa de Mac | Média: é a hora mais barata de mudar |
 | Instalar o motor de volumetria (Passo 8 do guia) e rodar em um T1 volumétrico; conferir o mapa colorido e contar o tempo que levou | Quando houver o Mac novo | Alta para a volumetria: é o primeiro teste em exame real |
@@ -34,7 +35,8 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Volumetria: ver se as notas automáticas de qualidade cabem na memória do Mac novo e, se couberem, oferecê-las como conferência extra | Mac novo |
 | Volumetria: ajustar a página de comparação com o exame anterior (palavras, estruturas, limites) | opinião do usuário e primeiro uso em exame real |
 | Volumetria: medir o limite de repetição em idosos e em 1,5 T, se aparecer um banco público com exames repetidos nessas condições | dados públicos |
-| Laudo | etapas anteriores |
+| Laudo: o usuário dita no Laudite, com máscaras e frases prontas. O NeuroLaudo entrega o texto das medidas e da volumetria no formato das máscaras dele, pronto para colar | máscaras do usuário |
+| Lesões de substância branca no FLAIR (volume, comparação com o anterior): estudo de viabilidade em `lesoes.yml` | resultado do estudo |
 
 ## Feito
 

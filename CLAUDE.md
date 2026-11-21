@@ -17,6 +17,8 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
 - Repositório: `mateusbarbqueiroz-max/neurolaudo`, público.
 - Para diagnóstico ele usa o OsiriX MD, que é certificado. O IsiX e o NeuroLaudo
   são apoio, sem certificação.
+- Ele lauda por ditado de voz no Laudite (máscaras e frases prontas). O NeuroLaudo
+  entrega texto para colar no laudo; não substitui o Laudite.
 
 ## Regras
 
