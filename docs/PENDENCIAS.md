@@ -1,6 +1,6 @@
 # Pendências
 
-Atualizado em 20/11/2026.
+Atualizado em 21/11/2026.
 
 ## Situação do Mac
 
@@ -23,6 +23,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Ver os exemplos da volumetria (`docs/exemplo-volumetria.png`, `docs/exemplo-conferencia.png`, `docs/volumetria-no-isix.png`) e dizer o que mudar: estruturas, ordem, cores, palavras, frase para o laudo | Quando puder; não precisa de Mac | Média: é a hora mais barata de mudar |
 | Instalar o motor de volumetria (Passo 8 do guia) e rodar em um T1 volumétrico; conferir o mapa colorido e contar o tempo que levou | Quando houver o Mac novo | Alta para a volumetria: é o primeiro teste em exame real |
 | Se houver laudos do NeuroQuant de exames antigos, rodar a nossa volumetria nos mesmos exames e comparar | Depois do item acima | Média: mostra o quanto os dois métodos diferem |
+| Em um paciente com dois exames com T1 3D (controle de demência, por exemplo), rodar a volumetria no exame antigo e depois no novo, e ver a página de comparação (Passo 8 do guia) | Depois dos dois itens acima | Média: é o primeiro teste da comparação em exame real |
 
 ## Do Claude
 
@@ -31,10 +32,16 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Com a lista do comando Nomes das séries: ensinar ao NeuroLaudo os nomes "não reconhecidos" e configurar os protocolos de exibição do IsiX para neuro | a lista colada pelo usuário |
 | Volumetria em exame real: ajustar o que o primeiro teste no Mac mostrar (tempo, memória, nomes de série) | teste do usuário no Mac novo |
 | Volumetria: ver se as notas automáticas de qualidade cabem na memória do Mac novo e, se couberem, oferecê-las como conferência extra | Mac novo |
-| Volumetria: comparação com o exame anterior do mesmo paciente (mudança de volume no tempo) | opinião do usuário sobre o relatório |
+| Volumetria: ajustar a página de comparação com o exame anterior (palavras, estruturas, limites) | opinião do usuário e primeiro uso em exame real |
+| Volumetria: medir o limite de repetição em idosos e em 1,5 T, se aparecer um banco público com exames repetidos nessas condições | dados públicos |
 | Laudo | etapas anteriores |
 
 ## Feito
+
+- Volumetria comparada com o exame anterior do mesmo paciente (21/11/2026): página nova no relatório,
+  com a variação, a taxa por ano e o limite de repetição medido em 20 voluntários públicos escaneados
+  em vários aparelhos (`docs/VOLUMETRIA.md`). Conferida em Linux; dentro do IsiX, com o fantoma.
+- Teste dentro do IsiX roda sozinho toda segunda-feira, com a versão mais nova do IsiX.
 
 - Aviso de segurança sobre a porta de comandos enviado pelo usuário ao autor do IsiX, por e-mail, em 20/11/2026.
 - IsiX 6.0.7 (20/11/2026) adotou as duas sugestões do aviso: links sem porta de rede, com opção própria, e porta de comandos atendendo só o próprio Mac de fábrica. Guia ajustado.

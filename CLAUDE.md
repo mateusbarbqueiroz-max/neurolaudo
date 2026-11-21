@@ -43,7 +43,9 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
   - `script/`, `Config/`, `NeuroLaudo.xcodeproj`: do modelo de plugin do IsiX.
 - `engine/`: motor em Python.
   - `neurolaudo/volumetry/`: `pipeline.py` (recorte, SynthSeg, normas), `norms.py`,
-    `report.py` e `overlay.py` (páginas), `volume.py` (NIfTI), `tables.py`, `cli.py`.
+    `report.py` e `overlay.py` (páginas), `volume.py` (NIfTI), `tables.py`, `cli.py`,
+    `history.py` (histórico local e comparação com o exame anterior), `compare_report.py` (página dela).
+    `data/repeticao.json`: limite de repetição medido por `volumetria.yml -f onde=repeticao`.
   - `tests/fakes/`: segmentador de mentira no lugar do SynthSeg.
   - `scripts/`: fantomas (`make_phantom.py`, `--rm`, `--t1`), validação e diagnóstico da volumetria.
 - `mac/`: scripts para o Mac do usuário (`instalar.sh`, `botao-pacs.sh`, `instalar-volumetria.sh`).
@@ -56,7 +58,7 @@ Horos/OsiriX. Plano aprovado em `docs/PLANO.md`.
 - Compilar o complemento: só em macOS, `plugin/script/build.sh --configuration Release`.
 - Acionar testes no GitHub: `gh workflow run ARQUIVO.yml --ref main [-f chave=valor]` (sem `--ref` falha).
   `isix.yml`: complemento dentro do IsiX (roda sozinho toda segunda, com o IsiX mais novo; ver a
-  última rodada antes de mexer no complemento). `volumetria.yml -f onde=linux|miniatura|ambos|diagnostico`:
+  última rodada antes de mexer no complemento). `volumetria.yml -f onde=linux|miniatura|ambos|diagnostico|repeticao`:
   segmentação de verdade em exames públicos.
 - Ler o resultado: `gh api repos/DONO/REPO/actions/runs/ID/jobs` (passos), `.../actions/jobs/ID/logs`
   (registro) e os arquivos das versões `teste-isix` e `teste-volumetria` (baixar com `curl`).

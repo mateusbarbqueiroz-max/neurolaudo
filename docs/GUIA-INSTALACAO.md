@@ -196,6 +196,17 @@ basta apagar essa pasta.
    percentil 4 ou 6) deve ser lido como limítrofe: o método tem um ruído de
    1 a 3 % nessas estruturas.
 
+7. **Comparação com o exame anterior.** Se o mesmo paciente já teve a
+   volumetria feita **neste Mac** em um exame mais antigo, o relatório ganha uma
+   página a mais: o volume de cada estrutura nos dois exames, a variação, a taxa
+   por ano e quanto a medida varia só por repetir o exame. Só sai marcado o que
+   passou desse limite. Para comparar com um exame antigo que ainda não foi
+   medido, rode a volumetria primeiro no T1 do exame antigo e depois no atual.
+   Para isso o NeuroLaudo guarda no Mac um histórico com volumes, datas, idade
+   e sexo; nome, número do paciente e do exame não ficam escritos (viram um
+   código que só este Mac reconhece). Para apagar o histórico, apague a pasta
+   `~/Library/Application Support/NeuroLaudo/historico`.
+
 O comando recusa séries que não servem (TC, série com poucos cortes, FLAIR,
 difusão) e avisa quando o nome da série sugere contraste. A imagem não sai do
 Mac: o motor roda nele, e os arquivos temporários são apagados no fim.

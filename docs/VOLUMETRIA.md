@@ -16,7 +16,9 @@ A partir de um T1 volumétrico (3D) sem contraste:
 - um relatório de uma página (tabela e gráficos), uma página de conferência com
   cortes coloridos e uma série colorida, corte a corte, para conferir a
   segmentação ao lado do T1;
-- uma frase pronta para colar no laudo, já com a ressalva de uso em pesquisa.
+- uma frase pronta para colar no laudo, já com a ressalva de uso em pesquisa;
+- se o mesmo paciente já teve a volumetria feita neste Mac em um exame mais
+  antigo, uma página de comparação com ele (seção abaixo).
 
 Exemplos, com voluntários de banco público (não são pacientes):
 
@@ -24,7 +26,9 @@ Exemplos, com voluntários de banco público (não são pacientes):
 - `docs/exemplo-conferencia.png`: a página de conferência, com segmentação de
   verdade (voluntário IXI002);
 - `docs/volumetria-no-isix.png`: o resultado dentro do IsiX, com o exame de
-  teste (fantoma): o T1 à esquerda e o mapa colorido à direita, no mesmo corte.
+  teste (fantoma): o T1 à esquerda e o mapa colorido à direita, no mesmo corte;
+- `docs/exemplo-comparacao.png`: a página de comparação com o exame anterior,
+  em um exemplo fictício (volumes de voluntário público alterados de propósito).
 
 ## Como funciona
 
@@ -43,6 +47,79 @@ Exemplos, com voluntários de banco público (não são pacientes):
 
 A imagem não sai do Mac. A pasta temporária, com a imagem e o nome do paciente,
 é apagada no fim, dê certo ou não.
+
+## Comparação com o exame anterior
+
+Quando o mesmo paciente já teve a volumetria feita **neste Mac** em um exame
+mais antigo, o relatório ganha uma página entre a principal e a de conferência:
+
+- o volume de cada estrutura nos dois exames, a variação e a taxa por ano (só
+  com intervalo de 6 meses ou mais);
+- o **limite de repetição**: a maior variação que só repetir o exame produz em
+  95 % das vezes. Só é marcado (▼ redução, ▲ aumento) o que passa desse limite;
+- a trajetória de cada estrutura sobre as faixas da referência, na idade de
+  cada exame;
+- uma frase a mais na frase para o laudo.
+
+**Qual limite.** Se o tamanho do voxel, o TR e o TE são iguais nos dois exames,
+vale o limite do mesmo aparelho; se mudam, ou se faltam, o de aparelhos
+diferentes, que é maior. A variação usa o volume ajustado ao volume
+intracraniano de cada exame (o mesmo dos percentis): entre aparelhos ele variou
+menos que o volume bruto.
+
+**Como o exame anterior é achado.** Pelo número do paciente, no histórico deste
+Mac. Se o exame anterior ainda não foi medido aqui, rode a volumetria primeiro
+no T1 dele e depois no atual. Exames com o mesmo número, mas com idade ou sexo
+que não fecham com o atual, ficam de fora, com aviso.
+
+**O histórico.** Fica só neste Mac, em `~/Library/Application
+Support/NeuroLaudo/historico`. De cada exame guarda os volumes, o volume
+intracraniano, a data, a idade, o sexo, o nome da série, o tamanho do voxel, o TR
+e o TE. O nome do paciente não é gravado; o número do paciente e o do exame viram
+um código (HMAC-SHA-256 com uma chave aleatória criada neste Mac) que só serve
+para reconhecer de novo o mesmo paciente. Apagar a pasta apaga o histórico.
+
+### Limite de repetição medido (21/11/2026)
+
+Banco público ON-Harmony (OpenNeuro ds004712, CC0; Warrington e colaboradores,
+Scientific Data, 2025): 20 adultos saudáveis de 19 a 50 anos, cada um escaneado
+em 6 aparelhos de 3 T (Siemens, Philips e GE), e 9 deles mais 5 vezes no mesmo
+aparelho, em dias diferentes. Foram 165 exames, com a volumetria completa em
+cada um (a mesma do complemento), nos servidores Linux do GitHub; em média um
+minuto por exame.
+
+| Estrutura | Mesmo aparelho | Aparelhos diferentes |
+| --- | --- | --- |
+| Hipocampo esquerdo | ±2,5 % | ±3,6 % |
+| Hipocampo direito | ±2,8 % | ±4,1 % |
+| Amígdala esquerda | ±7,5 % | ±8,8 % |
+| Amígdala direita | ±8,5 % | ±8,5 % |
+| Tálamo esquerdo | ±3,6 % | ±5,5 % |
+| Tálamo direito | ±4,4 % | ±7,8 % |
+| Ventrículos laterais | ±4,0 % | ±6,4 % |
+| Córtex cerebral | ±0,9 % | ±2,5 % |
+| Substância branca cerebral | ±0,8 % | ±2,0 % |
+| Encéfalo (parênquima) | ±0,7 % | ±1,2 % |
+
+Conferência: no mesmo aparelho, 4 a 7 % dos pares de exames da mesma pessoa
+passaram do limite (o esperado é 5 %); entre aparelhos, 4 a 7 %.
+
+Como ler:
+
+- **Hipocampos**: o limite fica em 2,5 a 4 %. Para ter a escala, a perda anual
+  do hipocampo na literatura é de cerca de 1,4 % em idosos saudáveis e de 4,7 %
+  na doença de Alzheimer (metanálise de Barnes e colaboradores, 2009). Em
+  intervalos curtos, a comparação só deve marcar perdas grandes.
+- **Amígdalas**: limite de 7,5 a 8,8 %. Pouco úteis para acompanhar.
+- **Encéfalo, córtex e substância branca**: os mais estáveis.
+- **Aparelho puxa para um lado**: em um dos aparelhos (GE), o tálamo direito
+  saiu em média 5,5 % menor que nos outros; nas demais estruturas, a diferença
+  média de cada aparelho ficou em até 2 %. Por isso o limite entre aparelhos é
+  maior.
+
+Arquivos completos: `repeticao.txt`, `repeticao.json` e `repeticao-exames.csv` na
+versão `teste-volumetria` do repositório. O motor usa
+`engine/neurolaudo/volumetry/data/repeticao.json`.
 
 ## De onde vêm os programas e a referência
 
@@ -115,6 +192,11 @@ exemplo, 4 ou 6) deve ser lido como limítrofe.
   e anatomia alterada. Tudo o que foi medido até aqui é de voluntários
   saudáveis de um banco público.
 - **Comparação com o NeuroQuant**, se houver laudos dele dos mesmos exames.
+- **Comparação entre exames em pacientes.** O limite de repetição foi medido em
+  adultos jovens e saudáveis, em 3 T e com voxel de 1 mm. Em idosos (mais
+  movimento, mais atrofia), em 1,5 T e com voxels maiores a variação deve ser
+  maior, e isso não foi medido. A página de comparação também ainda não foi vista
+  dentro do IsiX com exames reais.
 
 ## Decisões e porquês
 
@@ -153,7 +235,9 @@ exemplo, 4 ou 6) deve ser lido como limítrofe.
   desvio-padrão (estimativa do Neurodesk).
 - Nas estruturas pequenas, o enquadramento da imagem muda o volume em 1 a 3 %
   (tabela acima).
-- É medida de um único momento: não mede perda ao longo do tempo.
+- A página principal é medida de um único momento. A variação no tempo está
+  na página de comparação, quando há exame anterior medido neste Mac; o limite
+  de repetição dela vale para adultos jovens em 3 T (seção acima).
 - A referência é de T1 sem contraste, com voxel de cerca de 1 mm. Acima de
   1,5 mm o relatório avisa.
 - A segmentação pode errar em anatomia muito alterada (grandes lesões, cirurgia,
@@ -162,6 +246,9 @@ exemplo, 4 ou 6) deve ser lido como limítrofe.
 ## Como repetir as medições
 
 No GitHub, aba Actions, fluxo "Volumetria (teste real)", opção `onde`:
-`linux` (8 voluntários), `miniatura` (o recorte em Linux e Mac) ou
-`diagnostico` (tempo e memória por configuração). Os resultados ficam na
+`linux` (8 voluntários), `miniatura` (o recorte em Linux e Mac),
+`diagnostico` (tempo e memória por configuração) ou `repeticao` (limite de
+repetição: 20 voluntários do ON-Harmony, um servidor por pessoa, cerca de 15
+minutos). Depois de `repeticao`, copiar o `repeticao.json` publicado para
+`engine/neurolaudo/volumetry/data/`. Os resultados ficam na
 versão `teste-volumetria` do repositório.
