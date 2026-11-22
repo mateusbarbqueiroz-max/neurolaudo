@@ -390,6 +390,16 @@ jobs:
           REGISTRO | grep -q "volumetria: concluída" && echo "VOLUMETRIA NO ISIX: OK" || echo "VOLUMETRIA NO ISIX: NÃO CONCLUÍDA"
           REGISTRO | grep -q "comparado com o exame de 20250310" && echo "COMPARAÇÃO COM O EXAME ANTERIOR: OK" \
             || echo "COMPARAÇÃO COM O EXAME ANTERIOR: NÃO APARECEU"
+          # Texto para o laudo: a frase da volumetria que acabou de rodar neste exame; Copiar a leva para a área
+          # de transferência, de onde o usuário cola no Laudite.
+          plugin_clicar "ROI Tools" "Texto para o laudo (medidas deste exame)"
+          sleep 4
+          screencapture -x "$SAIDA/7b-texto-para-o-laudo.png" || echo "captura falhou"
+          clicar_isix "Copiar"
+          sleep 2
+          clicar_isix "Fechar"
+          echo "--- área de transferência:"; pbpaste | head -c 600; echo
+          pbpaste | grep -q "^Volumetria cerebral automática" && echo "TEXTO PARA O LAUDO: OK" || echo "TEXTO PARA O LAUDO: NÃO VEIO"
 
       - name: Botão do PACS simulado (link no formato do PACS do hospital)
         run: |
