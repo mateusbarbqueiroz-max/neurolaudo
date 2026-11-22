@@ -21,7 +21,7 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Mandar ao Claude os nomes das séries do serviço: com os exames reais já no IsiX, abrir **Plugins > Database > Nomes das séries (para ensinar o NeuroLaudo)**, tocar em **Copiar** e colar na conversa. Junto, dizer como gosta de ver a RM de encéfalo e a TC de crânio na tela (quantas janelas e qual série em cada) | Quando o Mac novo chegar e os primeiros exames tiverem passado pelo botão do PACS. Dá para adiantar pelo OsiriX MD, com a página explicativa entregue na conversa de 20/11/2026 | Média: com isso o IsiX passa a abrir o exame do botão já arrumado para neuro, e os nomes não reconhecidos são ensinados ao NeuroLaudo |
 | Mandar 2 ou 3 máscaras de laudo que usa no Laudite (RM de crânio, TC de crânio), sem dados de paciente | Quando puder; não precisa de Mac | Alta para a etapa do laudo |
 | Conferir os valores das janelas de TC (encéfalo 40/80, AVC 40/40, subdural 75/215, osso 600/2800, angio-TC 200/700, partes moles 50/350) | Quando puder | Média |
-| Ver os exemplos da volumetria (`docs/exemplo-volumetria.png`, `docs/exemplo-conferencia.png`, `docs/volumetria-no-isix.png`, `docs/exemplo-comparacao.png`) e dizer o que mudar: estruturas, ordem, cores, palavras, frase para o laudo | Quando puder; não precisa de Mac | Média: é a hora mais barata de mudar |
+| Ver os exemplos da volumetria (`docs/exemplo-volumetria.png`, `docs/exemplo-conferencia.png`, `docs/volumetria-no-isix.png`, `docs/exemplo-comparacao.png`, `docs/exemplo-texto-laudo.png`) e dizer o que mudar: estruturas, ordem, cores, palavras, frase para o laudo | Quando puder; não precisa de Mac | Média: é a hora mais barata de mudar |
 | Instalar o motor de volumetria (Passo 8 do guia) e rodar em um T1 volumétrico; conferir o mapa colorido e contar o tempo que levou | Quando houver o Mac novo | Alta para a volumetria: é o primeiro teste em exame real |
 | Se houver laudos do NeuroQuant de exames antigos, rodar a nossa volumetria nos mesmos exames e comparar | Depois do item acima | Média: mostra o quanto os dois métodos diferem |
 | Em um paciente com dois exames com T1 3D (controle de demência, por exemplo), rodar a volumetria no exame antigo e depois no novo, e ver a página de comparação (Passo 8 do guia) | Depois dos dois itens acima | Média: é o primeiro teste da comparação em exame real |
@@ -43,7 +43,8 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 - Texto para o laudo (22/11/2026): comando em **Plugins > ROI Tools** que junta as frases das medidas
   (linha média, ABC/2, ASPECTS, Evans) e da volumetria do exame aberto, uma por linha, para colar no
   Laudite. Copiar leva só as frases; avisos ficam fora. Só na memória, nada gravado. Frases provisórias,
-  até chegarem as máscaras.
+  até chegarem as máscaras. Conferido dentro do IsiX no servidor Mac, com o fantoma: depois da volumetria,
+  a janela mostra a frase e o exame, e Copiar a põe na área de transferência (`docs/exemplo-texto-laudo.png`).
 - Estudo das lesões no FLAIR (21/11/2026, `docs/LESOES-FLAIR.md`): a versão por fatias roda em cerca de
   6 GB e dá o mesmo resultado do WMH-SynthSeg original, conferido num exame inteiro (mesmo rótulo em
   100 % dos voxels). Repetição medida em 164 exames públicos. Não faz parte do complemento.
