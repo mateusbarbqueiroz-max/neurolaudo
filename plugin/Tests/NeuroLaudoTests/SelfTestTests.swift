@@ -10,7 +10,7 @@ final class SelfTestTests: XCTestCase {
             let h = try Harness(selfTest: true)
             let viewer = h.addViewer(spacing: 0.8, interval: 2.5)
             let checks = try SelfTest.run(in: viewer)
-            XCTAssertEqual(checks.map(\.name), ["comprimento", "Evans", "linha média", "ABC/2", "janela"])
+            XCTAssertEqual(checks.map(\.name), ["comprimento", "Evans", "linha média", "ABC/2", "janela", "texto para o laudo"])
             for check in checks { XCTAssertTrue(check.passed, check.line) }
             XCTAssertTrue(viewer.stubROIs.isEmpty)
             // A janela que estava antes é devolvida.
@@ -23,7 +23,7 @@ final class SelfTestTests: XCTestCase {
             let normal = try Harness()
             XCTAssertFalse(normal.context.stubCommands.contains { $0.command.id == NeuroLaudoPlugin.Command.selfTest })
             let ci = try Harness(selfTest: true)
-            XCTAssertEqual(ci.context.stubCommands.count, 18)
+            XCTAssertEqual(ci.context.stubCommands.count, 19)
             let viewer = ci.addViewer()
             try ci.context.stubRun(NeuroLaudoPlugin.Command.selfTestMiddle)
             XCTAssertEqual(try viewer.series().currentSlice, 20)

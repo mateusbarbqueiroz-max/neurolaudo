@@ -212,6 +212,9 @@ final class VolumetryTests: XCTestCase {
             XCTAssertTrue(shown.title.contains("Uso em pesquisa"))
             XCTAssertTrue(shown.text.contains("hipocampo esquerdo 3,7 mL") && shown.text.contains("Aviso de teste."))
             XCTAssertTrue(shown.text.contains("página de comparação com o exame de 10/03/2025"))
+            // A frase da volumetria entra no texto para o laudo do exame.
+            XCTAssertEqual(harness.plugin.reports.book(for: "study-1")?.text,
+                           "Volumetria cerebral automática: hipocampo esquerdo 3,7 mL (percentil 2).")
             // A pasta temporária, com a imagem e o nome do paciente, foi apagada, e os arquivos do IsiX também.
             let job = try XCTUnwrap(engine.jobs.first)
             XCTAssertFalse(FileManager.default.fileExists(atPath: job.folder.path))

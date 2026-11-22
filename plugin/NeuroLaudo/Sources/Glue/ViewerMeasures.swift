@@ -8,6 +8,10 @@ import IsiXPluginKit
 struct MeasureOutcome: Equatable, Sendable {
     var title: String
     var text: String
+    /// O que o botão Copiar copia; `nil`: o texto inteiro; vazio: sem botão Copiar.
+    var copyText: String? = nil
+    /// A frase que entra no texto para o laudo do exame, se o comando mediu algo.
+    var entry: ReportEntry? = nil
 }
 
 extension Vec3 {
@@ -83,7 +87,8 @@ struct HematomaInputs: Sendable {
         let skull = a.segment.lengthMM <= b.segment.lengthMM ? b : a
         rename(horns.roi, to: "Cornos frontais", in: viewer)
         rename(skull.roi, to: "Crânio (interno)", in: viewer)
-        return MeasureOutcome(title: "Índice de Evans", text: result.summary)
+        return MeasureOutcome(title: "Índice de Evans", text: result.summary,
+                              entry: ReportEntry(kind: .evans, sentence: result.summary))
     }
 
     // MARK: Desvio da linha média
@@ -111,7 +116,8 @@ struct HematomaInputs: Sendable {
         }
         rename(longest.roi, to: "Linha média", in: viewer)
         let result = try NeuroMeasures.midlineShift(midline: longest.segment, septum: septum)
-        return MeasureOutcome(title: "Desvio da linha média", text: result.summary)
+        return MeasureOutcome(title: "Desvio da linha média", text: result.summary,
+                              entry: ReportEntry(kind: .midline, sentence: result.summary))
     }
 
     // MARK: Volume de hematoma (ABC/2)
@@ -131,6 +137,7 @@ struct HematomaInputs: Sendable {
             rename(aIsFirst ? inputs.first.roi : inputs.second.roi, to: "Hematoma A", in: viewer)
             rename(aIsFirst ? inputs.second.roi : inputs.first.roi, to: "Hematoma B", in: viewer)
         }
-        return MeasureOutcome(title: "Volume de hematoma (ABC/2)", text: result.summary)
+        return MeasureOutcome(title: "Volume de hematoma (ABC/2)", text: result.summary,
+                              entry: ReportEntry(kind: .hematoma, sentence: result.sentence, warning: result.warning))
     }
 }

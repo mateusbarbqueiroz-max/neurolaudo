@@ -147,8 +147,17 @@ bash <(curl -fsSL https://raw.githubusercontent.com/mateusbarbqueiroz-max/neurol
 
 Abra o IsiX. Em **Plugins > Plugins Manager** deve aparecer o NeuroLaudo. Os
 comandos ficam nos menus **Plugins > Image Filters** (janelas), **Plugins > ROI
-Tools** (medidas) e **Plugins > Database** (protocolo, comparação e nomes das séries). A ajuda
+Tools** (medidas e texto para o laudo) e **Plugins > Database** (protocolo, comparação e nomes das séries). A ajuda
 está em **Plugins > Others > NeuroLaudo: ajuda**.
+
+**Texto para o laudo.** Depois das medidas (Evans, linha média, ABC/2, ASPECTS) e da
+volumetria, **Plugins > ROI Tools > Texto para o laudo (medidas deste exame)** junta as
+frases do exame aberto, uma por linha, na ordem: linha média, hematoma, ASPECTS, Evans,
+volumetria. **Copiar** leva só as frases, para colar no Laudite; os avisos (por exemplo,
+medidas do ABC/2 que não são perpendiculares) aparecem na janela e não vão para o texto.
+Vale a última medida de cada tipo: medir de novo troca a frase. Nada fica gravado depois
+que o IsiX fecha. As frases ainda são as provisórias do NeuroLaudo; vão seguir as suas
+máscaras quando você mandá-las.
 
 O complemento também abre sozinho, com as séries arrumadas pelo protocolo de
 neuro, o exame que chega pela rede sem ter sido aberto pelo IsiX (por exemplo,

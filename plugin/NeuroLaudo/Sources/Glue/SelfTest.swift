@@ -97,6 +97,19 @@ import IsiXPluginKit
         checks.append(Check(name: "janela", passed: near(after.center, 600, tolerance: 1) && near(after.width, 2800, tolerance: 1),
                             detail: "lida \(text(after.center))/\(text(after.width)), esperado 600/2800"))
 
+        // 6. Texto para o laudo: as frases das medidas acima, na ordem do laudo, guardadas pelo exame da série.
+        var book = ReportBook()
+        book.record(ReportEntry(kind: .evans, sentence: evans.summary))
+        book.record(midline.entry ?? ReportEntry(kind: .midline, sentence: midline.text))
+        book.record(ReportEntry(kind: .hematoma, sentence: hematoma.sentence, warning: hematoma.warning))
+        let sentences = book.text.components(separatedBy: "\n")
+        let study = ReportCommands.study(of: viewer)
+        let ordered = sentences.count == 3 && sentences[0].hasPrefix("Desvio") && sentences[1].hasPrefix("Hematoma")
+            && sentences[2].hasPrefix("Índice de Evans")
+        checks.append(Check(name: "texto para o laudo", passed: ordered && study != nil,
+                            detail: "\(sentences.count) frases\(ordered ? " na ordem" : " FORA DE ORDEM"); "
+                                + "exame da série \(study == nil ? "não identificado" : "identificado")"))
+
         return checks
     }
 

@@ -8,6 +8,8 @@ import AppKit
 
 @MainActor final class AppKitPresenter: Presenting {
     private var aspectsPanel: AspectsPanelController?
+    /// O exame do painel do ASPECTS; outro exame começa com o painel limpo.
+    private var aspectsStudy: String?
 
     /// Copia um texto para a área de transferência, para colar no laudo.
     static func copy(_ text: String) {
@@ -48,15 +50,16 @@ import AppKit
         } else {
             alert.informativeText = outcome.text
         }
-        alert.addButton(withTitle: "Copiar")
+        // Copiar leva `copyText` quando há (o texto para o laudo, sem as notas); vazio: só Fechar.
+        let text = outcome.copyText ?? outcome.text
+        if !text.isEmpty { alert.addButton(withTitle: "Copiar") }
         alert.addButton(withTitle: "Fechar")
-        let text = outcome.text
         if let window, window.isVisible, window.attachedSheet == nil {
             alert.beginSheetModal(for: window) { response in
-                guard response == .alertFirstButtonReturn else { return }
+                guard response == .alertFirstButtonReturn, !text.isEmpty else { return }
                 Task { @MainActor in AppKitPresenter.copy(text) }
             }
-        } else if alert.runModal() == .alertFirstButtonReturn {
+        } else if alert.runModal() == .alertFirstButtonReturn, !text.isEmpty {
             AppKitPresenter.copy(text)
         }
     }
@@ -84,8 +87,11 @@ import AppKit
         }
     }
 
-    func showAspects() {
+    func showAspects(for study: String?, onChange: @escaping @MainActor @Sendable (String?) -> Void) {
         if aspectsPanel == nil { aspectsPanel = AspectsPanelController() }
+        if study != aspectsStudy { aspectsPanel?.reset() }
+        aspectsStudy = study
+        aspectsPanel?.onChange = onChange
         aspectsPanel?.showWindow(nil)
         aspectsPanel?.window?.makeKeyAndOrderFront(nil)
     }
@@ -93,15 +99,19 @@ import AppKit
     func closeAll() {
         aspectsPanel?.close()
         aspectsPanel = nil
+        aspectsStudy = nil
     }
 }
 
-/// Painel flutuante com as dez regiões do ASPECTS e a frase pronta para o laudo.
+/// Painel flutuante com as dez regiões do ASPECTS e a frase pronta para o laudo. Cada mudança
+/// também vai para o texto para o laudo do exame.
 @MainActor final class AspectsPanelController: NSWindowController {
     private var boxes: [(code: String, button: NSButton)] = []
     private let sidePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let scoreLabel = NSTextField(labelWithString: "ASPECTS 10")
     private let sentenceLabel = NSTextField(wrappingLabelWithString: "")
+    /// Avisado a cada mudança feita pelo usuário (a frase) e quando ele limpa o painel (`nil`).
+    var onChange: (@MainActor @Sendable (String?) -> Void)?
 
     init() {
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 400),
@@ -174,17 +184,26 @@ import AppKit
         sentenceLabel.stringValue = (try? Aspects.summary(affected: affected, side: side)) ?? ""
     }
 
+    /// Volta ao começo sem avisar ninguém: outro exame.
+    func reset() {
+        for box in boxes { box.button.state = .off }
+        sidePopup.selectItem(at: 0)
+        update()
+    }
+
     @objc private func changed(_ sender: Any?) {
         update()
+        onChange?(sentenceLabel.stringValue)
     }
 
     @objc private func copySentence(_ sender: Any?) {
         AppKitPresenter.copy(sentenceLabel.stringValue)
+        onChange?(sentenceLabel.stringValue)
     }
 
     @objc private func clear(_ sender: Any?) {
-        for box in boxes { box.button.state = .off }
-        update()
+        reset()
+        onChange?(nil)
     }
 }
 #endif

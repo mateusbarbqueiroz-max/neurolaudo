@@ -63,4 +63,12 @@ enum Fmt {
 
     static func mm(_ value: Double) -> String { number(value, decimals: 1) + " mm" }
     static func cm(fromMM value: Double) -> String { number(value / 10, decimals: 1) + " cm" }
+
+    /// Data como no Brasil: 21/11/2026.
+    static func date(_ value: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "pt_BR")
+        formatter.dateFormat = "dd/MM/yyyy"
+        return formatter.string(from: value)
+    }
 }

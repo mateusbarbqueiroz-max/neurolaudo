@@ -139,9 +139,6 @@ extension StudyInfo {
 
     private static func dateText(_ date: Date?) -> String {
         guard let date else { return "" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "pt_BR")
-        formatter.dateFormat = "dd/MM/yyyy"
-        return " de " + formatter.string(from: date)
+        return " de " + Fmt.date(date)
     }
 }

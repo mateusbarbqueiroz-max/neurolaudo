@@ -58,14 +58,19 @@ struct HematomaResult: Equatable, Sendable {
     var volumeML: Double { NeuroMeasures.abc2VolumeML(aMM: aMM, bMM: bMM, cMM: cMM) }
     var isRoughlyPerpendicular: Bool { (angleDegrees ?? 90) >= 70 }
 
-    var summary: String {
-        var text = "Hematoma medindo \(Fmt.number(aMM / 10, decimals: 1)) x \(Fmt.number(bMM / 10, decimals: 1)) x "
+    /// A frase para o laudo.
+    var sentence: String {
+        "Hematoma medindo \(Fmt.number(aMM / 10, decimals: 1)) x \(Fmt.number(bMM / 10, decimals: 1)) x "
             + "\(Fmt.number(cMM / 10, decimals: 1)) cm, com volume estimado de \(Fmt.number(volumeML, decimals: 1)) mL (método ABC/2)."
-        if let angle = angleDegrees, !isRoughlyPerpendicular {
-            text += " Atenção: A e B formam \(Fmt.number(angle, decimals: 0))°; o método pede medidas perpendiculares."
-        }
-        return text
     }
+
+    /// Aviso para quem mediu; não vai para o laudo.
+    var warning: String? {
+        guard let angle = angleDegrees, !isRoughlyPerpendicular else { return nil }
+        return "Atenção: A e B formam \(Fmt.number(angle, decimals: 0))°; o método pede medidas perpendiculares."
+    }
+
+    var summary: String { sentence + (warning.map { " " + $0 } ?? "") }
 }
 
 enum Side: String, Equatable, Sendable {

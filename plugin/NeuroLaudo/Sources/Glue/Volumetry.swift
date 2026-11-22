@@ -180,6 +180,8 @@ struct VolumetryStored: Sendable, Equatable {
     /// Páginas do relatório e data do exame anterior comparado, para o registro.
     var pages = 0
     var comparedWith: String?
+    /// A frase para o laudo, com a comparação, se houve.
+    var sentence = ""
 }
 
 enum Volumetry {
@@ -397,6 +399,7 @@ enum Volumetry {
             }
             stored.pages = result.pages.count
             stored.comparedWith = result.comparedWith
+            stored.sentence = result.reportSentence
             return (outcome(result), stored)
         } catch is CancellationError {
             return (MeasureOutcome(title: title, text: "Volumetria cancelada. Nada foi gravado no exame."), nil)

@@ -1,6 +1,6 @@
 # Pendências
 
-Atualizado em 21/11/2026.
+Atualizado em 22/11/2026.
 
 ## Situação do Mac
 
@@ -35,11 +35,15 @@ compilado, instalado e exercitado dentro do IsiX (`docs/FATOS-ISIX.md`, seção
 | Volumetria: ver se as notas automáticas de qualidade cabem na memória do Mac novo e, se couberem, oferecê-las como conferência extra | Mac novo |
 | Volumetria: ajustar a página de comparação com o exame anterior (palavras, estruturas, limites) | opinião do usuário e primeiro uso em exame real |
 | Volumetria: medir o limite de repetição em idosos e em 1,5 T, se aparecer um banco público com exames repetidos nessas condições | dados públicos |
-| Laudo: o usuário dita no Laudite, com máscaras e frases prontas. O NeuroLaudo entrega o texto das medidas e da volumetria no formato das máscaras dele, pronto para colar | máscaras do usuário |
+| Laudo: o usuário dita no Laudite, com máscaras e frases prontas. Já existe o comando **Texto para o laudo** (frases provisórias das medidas e da volumetria do exame, prontas para colar); falta pôr as frases no formato das máscaras dele | máscaras do usuário |
 | Lesões de substância branca no FLAIR: o estudo (`docs/LESOES-FLAIR.md`) mostrou que roda num Mac de 16 GB com a versão por fatias. A repetição em 164 exames públicos deu ±2,3 mL no mesmo aparelho e ±4,6 mL entre aparelhos, com mediana de 7,3 mL em voluntários saudáveis. Falta a decisão do usuário sobre a utilidade | opinião do usuário |
 
 ## Feito
 
+- Texto para o laudo (22/11/2026): comando em **Plugins > ROI Tools** que junta as frases das medidas
+  (linha média, ABC/2, ASPECTS, Evans) e da volumetria do exame aberto, uma por linha, para colar no
+  Laudite. Copiar leva só as frases; avisos ficam fora. Só na memória, nada gravado. Frases provisórias,
+  até chegarem as máscaras.
 - Estudo das lesões no FLAIR (21/11/2026, `docs/LESOES-FLAIR.md`): a versão por fatias roda em cerca de
   6 GB e dá o mesmo resultado do WMH-SynthSeg original, conferido num exame inteiro (mesmo rótulo em
   100 % dos voxels). Repetição medida em 164 exames públicos. Não faz parte do complemento.

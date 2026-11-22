@@ -16,8 +16,9 @@ import IsiXPluginKit
     func show(_ outcome: MeasureOutcome, in window: NSWindow?)
     /// Pergunta em quantos cortes o hematoma aparece; `nil` se o usuário cancelou.
     func askSliceCount(intervalMM: Double, in window: NSWindow?, completion: @escaping @MainActor @Sendable (Double?) -> Void)
-    /// Abre o painel do ASPECTS.
-    func showAspects()
+    /// Abre o painel do ASPECTS do exame `study`. `onChange` recebe a frase a cada mudança do usuário,
+    /// ou `nil` quando ele limpa o painel.
+    func showAspects(for study: String?, onChange: @escaping @MainActor @Sendable (String?) -> Void)
     /// Fecha o que estiver aberto, ao desativar o complemento.
     func closeAll()
 }
@@ -27,6 +28,9 @@ import IsiXPluginKit
     var shown: [MeasureOutcome] = []
     var sliceCountAnswer: Double?
     var aspectsRequests = 0
+    var aspectsStudy: String?
+    /// O que o painel do ASPECTS chamaria; os testes o chamam no lugar do usuário.
+    var aspectsChange: (@MainActor @Sendable (String?) -> Void)?
 
     func show(_ outcome: MeasureOutcome, in window: NSWindow?) { shown.append(outcome) }
 
@@ -34,7 +38,11 @@ import IsiXPluginKit
         completion(sliceCountAnswer)
     }
 
-    func showAspects() { aspectsRequests += 1 }
+    func showAspects(for study: String?, onChange: @escaping @MainActor @Sendable (String?) -> Void) {
+        aspectsRequests += 1
+        aspectsStudy = study
+        aspectsChange = onChange
+    }
 
     func closeAll() {}
 }
@@ -56,6 +64,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         static let midline = "medida-linha-media"
         static let hematoma = "medida-abc2"
         static let aspects = "medida-aspects"
+        static let reportText = "texto-laudo"
         static let protocolAuto = "protocolo-neuro"
         static let comparePrior = "comparar-anterior"
         static let autoOpenToggle = "abrir-ao-chegar"
@@ -75,6 +84,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         • Desvio da linha média: uma linha sobre a linha média ideal e um ponto no septo pelúcido.
         • Volume de hematoma (ABC/2): duas linhas perpendiculares no corte de maior hematoma.
         • ASPECTS: painel com as dez regiões.
+        • Texto para o laudo: junta as frases das medidas e da volumetria deste exame, uma por linha, \
+        para copiar e colar no Laudite. Vale a última medida de cada tipo; nada fica gravado depois que o IsiX fecha.
 
         Exames (menu Plugins › Database):
         • Protocolo de neuro: abre as séries do exame na ordem do protocolo.
@@ -106,6 +117,8 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
     /// Quem roda a volumetria. Trocado pelos testes; por padrão, o motor instalado no Mac.
     var engine: (any VolumetryEngine)?
     private var volumetryTask: IsiXTask?
+    /// As frases para o laudo, por exame, enquanto o IsiX está aberto.
+    var reports = ReportStore()
 
     public init() {}
 
@@ -160,7 +173,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
             }
         }
         // Prova de que o IsiX carregou e ativou o complemento; ver PluginLog.
-        let count = NeuroWindowPresets.ct.count + 10 + (selfTest ? 2 : 0)
+        let count = NeuroWindowPresets.ct.count + 11 + (selfTest ? 2 : 0)
         PluginLog.note("NeuroLaudo \(context.info.version) ativado, \(count) comandos")
     }
 
@@ -174,6 +187,7 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         volumetryTask = nil
         presenter?.closeAll()
         presenter = nil
+        reports = ReportStore()
         context = nil
     }
 
@@ -201,17 +215,19 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         try context.register(IsiXCommand(id: Command.evans, title: "Índice de Evans", placement: .roiTools,
                                          requirement: .viewer)) { [weak self] invocation in
             guard let viewer = invocation.viewer else { return }
-            self?.presenter?.show(try ViewerMeasures.evans(in: viewer), in: invocation.parentWindow)
+            self?.present(try ViewerMeasures.evans(in: viewer), study: ReportCommands.study(of: viewer), in: invocation.parentWindow)
         }
         try context.register(IsiXCommand(id: Command.midline, title: "Desvio da linha média", placement: .roiTools,
                                          requirement: .viewer)) { [weak self] invocation in
             guard let viewer = invocation.viewer else { return }
-            self?.presenter?.show(try ViewerMeasures.midlineShift(in: viewer), in: invocation.parentWindow)
+            self?.present(try ViewerMeasures.midlineShift(in: viewer), study: ReportCommands.study(of: viewer),
+                          in: invocation.parentWindow)
         }
         try context.register(IsiXCommand(id: Command.hematoma, title: "Volume de hematoma (ABC/2)…", placement: .roiTools,
                                          requirement: .viewer)) { [weak self] invocation in
             guard let self, let viewer = invocation.viewer else { return }
             let inputs = try ViewerMeasures.hematomaInputs(in: viewer)
+            let study = ReportCommands.study(of: viewer)
             let window = invocation.parentWindow
             self.presenter?.askSliceCount(intervalMM: inputs.sliceIntervalMM, in: window) { [weak self] count in
                 guard let self, let count else { return }
@@ -221,12 +237,40 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
                 } catch {
                     outcome = MeasureOutcome(title: "Volume de hematoma (ABC/2)", text: Self.describe(error))
                 }
-                self.presenter?.show(outcome, in: window)
+                self.present(outcome, study: study, in: window)
             }
         }
         try context.register(IsiXCommand(id: Command.aspects, title: "ASPECTS…", placement: .roiTools,
-                                         requirement: .none)) { [weak self] _ in
-            self?.presenter?.showAspects()
+                                         requirement: .none)) { [weak self] invocation in
+            guard let self, let context = self.context else { return }
+            let study = ReportCommands.study(of: invocation.viewer ?? (try? context.frontmostViewer()))
+            self.presenter?.showAspects(for: study) { [weak self] sentence in
+                guard let self, let study else { return }
+                self.recordAspects(sentence, study: study)
+            }
+        }
+        try context.register(IsiXCommand(id: Command.reportText, title: "Texto para o laudo (medidas deste exame)",
+                                         placement: .roiTools, requirement: .none)) { [weak self] invocation in
+            guard let self, let context = self.context else { return }
+            // O exame da série aberta; sem série aberta, o último exame medido.
+            let viewer = invocation.viewer ?? (try? context.frontmostViewer())
+            let study = viewer == nil ? self.reports.lastStudy : ReportCommands.study(of: viewer)
+            let outcome = ReportCommands.outcome(study: study, store: self.reports, database: try? context.database())
+            self.presenter?.show(outcome, in: invocation.parentWindow)
+        }
+    }
+
+    /// Mostra o resultado de uma medida e guarda a frase dela no texto para o laudo do exame.
+    private func present(_ outcome: MeasureOutcome, study: String?, in window: NSWindow?) {
+        if let entry = outcome.entry, let study { reports.record(entry, study: study) }
+        presenter?.show(outcome, in: window)
+    }
+
+    private func recordAspects(_ sentence: String?, study: String) {
+        if let sentence, !sentence.isEmpty {
+            reports.record(ReportEntry(kind: .aspects, sentence: sentence), study: study)
+        } else {
+            reports.remove(.aspects, study: study)
         }
     }
 
@@ -283,8 +327,9 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         let job = try Volumetry.prepare(viewer: viewer, context: context)
         PluginLog.note("volumetria: série copiada, \(job.geometries.count) cortes, orientação \(job.orientation)")
         // O que fazer na janela quando o motor terminar. Fica na linha principal, como os outros comandos.
+        let study = job.studyInstanceUID
         let finish: @MainActor @Sendable (MeasureOutcome, VolumetryStored?) -> Void = { [weak self] outcome, stored in
-            self?.finishVolumetry(outcome, stored: stored, context: context)
+            self?.finishVolumetry(outcome, stored: stored, study: study, context: context)
         }
         let task = try context.startTask(named: "Volumetria cerebral") { progress in
             let done = await Volumetry.perform(job, engine: engine, context: context, progress: progress)
@@ -294,8 +339,10 @@ public final class NeuroLaudoPlugin: IsiXPlugin {
         return task
     }
 
-    private func finishVolumetry(_ outcome: MeasureOutcome, stored: VolumetryStored?, context: IsiXPluginContext) {
+    private func finishVolumetry(_ outcome: MeasureOutcome, stored: VolumetryStored?, study: String,
+                                 context: IsiXPluginContext) {
         if let stored {
+            if !stored.sentence.isEmpty { reports.record(ReportEntry(kind: .volumetry, sentence: stored.sentence), study: study) }
             let compared = stored.comparedWith.map { ", comparado com o exame de \($0)" } ?? ""
             PluginLog.note("volumetria: concluída, relatório \(stored.reportSeriesUID ?? "-") (\(stored.pages) página(s)\(compared)), "
                 + "mapa \(stored.mapSeriesUID ?? "-")")
